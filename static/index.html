@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1a56c0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ФОТ">
+<link rel="manifest" href="/static/manifest.json">
+<title>ФОТ — Москва 2 КК</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--blue:#1a56c0;--blue-light:#e8f0fe;--green:#1a9e6e;--green-light:#e6f9f1;--warn:#c07c00;--warn-light:#fff8e6;--red:#c0392b;--red-light:#fdecea;--bg:#f2f4f8;--card:#fff;--border:#e0e0e0;--text:#1a1a1a;--muted:#888}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;min-height:100vh}
+
+/* LOGIN */
+#loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.login-logo{font-size:48px;margin-bottom:8px}
+.login-title{font-size:22px;font-weight:700;color:var(--blue);margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:32px}
+.login-card{background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.login-card label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px;margin-top:14px}
+.login-card label:first-child{margin-top:0}
+.login-card input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;outline:none;transition:border .15s}
+.login-card input:focus{border-color:var(--blue)}
+.btn-primary{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-top:20px;transition:opacity .15s}
+.btn-primary:active{opacity:.85}
+.login-error{color:var(--red);font-size:13px;text-align:center;margin-top:10px;min-height:18px}
+
+/* APP */
+#appScreen{display:none;flex-direction:column;min-height:100vh}
+.top-bar{background:var(--blue);color:#fff;padding:12px 16px 12px;padding-top:max(12px,env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.top-bar-title{font-size:16px;font-weight:700}
+.top-bar-sub{font-size:11px;opacity:.8;margin-top:1px}
+.top-bar-right{display:flex;align-items:center;gap:12px}
+.btn-icon{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
+
+.content{padding:16px;padding-bottom:80px;flex:1}
+
+/* CARDS */
+.section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;margin-top:16px}
+.section-label:first-child{margin-top:0}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.metric{background:var(--bg);border-radius:10px;padding:12px}
+.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.metric-value{font-size:20px;font-weight:700}
+.metric-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.ok{color:var(--green)}.warn{color:var(--warn)}.err{color:var(--red)}
+
+/* PROGRESS */
+.progress-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.progress-bar{height:8px;background:#eee;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;transition:width .4s}
+
+/* STAFF TABLE */
+.staff-table{width:100%;font-size:13px}
+.staff-group{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px;border-bottom:1px solid var(--border)}
+.staff-row{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid #f0f0f0}
+.staff-row:last-child{border-bottom:none}
+.staff-name{flex:1;font-size:13px}
+.staff-rate{font-size:11px;color:var(--muted);margin-top:1px}
+.staff-salary{font-size:14px;font-weight:700;color:var(--blue);text-align:right;min-width:90px}
+.staff-fact{font-size:11px;color:var(--muted);text-align:right}
+
+/* BADGE */
+.badge{display:inline-block;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600}
+.b-ok{background:var(--green-light);color:var(--green)}
+.b-warn{background:var(--warn-light);color:var(--warn)}
+.b-err{background:var(--red-light);color:var(--red)}
+.b-info{background:var(--blue-light);color:var(--blue)}
+
+/* FORECAST PARAMS */
+.params-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.params-row label{font-size:13px;color:var(--muted);min-width:120px}
+.params-row input,.params-row select{flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none}
+.params-row input:focus,.params-row select:focus{border-color:var(--blue)}
+.btn-recalc{width:100%;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
+
+/* SUMMARY TABLE (admin) */
+.sum-row{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;gap:8px}
+.sum-row:last-child{border-bottom:none}
+.sum-store{font-weight:600;font-size:14px;min-width:44px}
+.sum-name{flex:1;font-size:12px;color:var(--muted)}
+.sum-right{text-align:right}
+.sum-fot{font-size:14px;font-weight:700}
+.sum-pct{font-size:11px;margin-top:1px}
+
+/* TABS */
+.tabs{display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;margin-bottom:16px}
+.tab-btn{flex:1;padding:8px 4px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--muted);transition:all .15s}
+.tab-btn.active{background:#fff;color:var(--blue);font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+
+/* DATE CHIP */
+.date-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.2);border-radius:6px;padding:3px 8px;font-size:11px}
+
+/* BOTTOM NAV (admin only) */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);display:flex;padding-bottom:max(8px,env(safe-area-inset-bottom));z-index:100}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:10px;gap:3px;font-weight:500}
+.nav-btn.active{color:var(--blue)}
+.nav-icon{font-size:20px}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+.spinner{text-align:center;padding:40px;font-size:24px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-logo">📊</div>
+  <div class="login-title">ФОТ Калькулятор</div>
+  <div class="login-sub">Москва 2 КК — Личный кабинет</div>
+  <div class="login-card">
+    <label>Логин</label>
+    <input type="text" id="loginInput" placeholder="Ваш логин" autocomplete="username">
+    <label>Пин-код</label>
+    <input type="password" id="pinInput" placeholder="••••" autocomplete="current-password" inputmode="numeric">
+    <button class="btn-primary" onclick="doLogin()">Войти</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen">
+  <div class="top-bar">
+    <div>
+      <div class="top-bar-title" id="appTitle">ФОТ</div>
+      <div class="top-bar-sub" id="appSub">Загрузка...</div>
+    </div>
+    <div class="top-bar-right">
+      <span class="date-chip" id="fileDateChip">—</span>
+      <button class="btn-icon" onclick="doLogout()">Выход</button>
+    </div>
+  </div>
+
+  <div class="content" id="mainContent">
+    <div class="spinner">⏳</div>
+  </div>
+
+  <!-- Bottom nav для админа -->
+  <div class="bottom-nav" id="bottomNav" style="display:none">
+    <button class="nav-btn active" id="nav-summary" onclick="setAdminView('summary')">
+      <span class="nav-icon">📋</span>Сводка
+    </button>
+    <button class="nav-btn" id="nav-stores" onclick="setAdminView('stores')">
+      <span class="nav-icon">🏪</span>Магазины
+    </button>
+    <button class="nav-btn" id="nav-settings" onclick="setAdminView('settings')">
+      <span class="nav-icon">⚙️</span>Настройки
+    </button>
+  </div>
+</div>
+
+<script>
+const API = '';
+let TOKEN = localStorage.getItem('fot_token');
+let USER = JSON.parse(localStorage.getItem('fot_user') || 'null');
+let DATA = null;
+let ADMIN_VIEW = 'summary';
+let PARAMS = { days_total: 31, day_report: null, forecast_pct: 100, mode: 'avg' };
+
+function fmt(n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽'; }
+function fmtp(n) { return n.toFixed(1) + '%'; }
+
+// ── AUTH ──
+async function doLogin() {
+  const username = document.getElementById('loginInput').value.trim();
+  const pin = document.getElementById('pinInput').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!username || !pin) { errEl.textContent = 'Введите логин и пин-код'; return; }
+
+  const fd = new FormData();
+  fd.append('username', username);
+  fd.append('pin', pin);
+
+  try {
+    const res = await fetch(API + '/api/login', { method: 'POST', body: fd });
+    if (!res.ok) { errEl.textContent = 'Неверный логин или пин-код'; return; }
+    const data = await res.json();
+    TOKEN = data.token;
+    USER = { role: data.role, store_id: data.store_id, username: data.username };
+    localStorage.setItem('fot_token', TOKEN);
+    localStorage.setItem('fot_user', JSON.stringify(USER));
+    showApp();
+  } catch (e) {
+    errEl.textContent = 'Ошибка соединения с сервером';
+  }
+}
+
+async function doLogout() {
+  if (TOKEN) {
+    const fd = new FormData(); fd.append('token', TOKEN);
+    await fetch(API + '/api/logout', { method: 'POST', body: fd }).catch(() => {});
+  }
+  localStorage.removeItem('fot_token');
+  localStorage.removeItem('fot_user');
+  TOKEN = null; USER = null; DATA = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginInput').value = '';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'flex';
+
+  if (USER.role === 'admin') {
+    document.getElementById('appTitle').textContent = 'ФОТ — Подразделение';
+    document.getElementById('appSub').textContent = 'Администратор';
+    document.getElementById('bottomNav').style.display = 'flex';
+  } else {
+    document.getElementById('appTitle').textContent = 'ФОТ — Мой магазин';
+    document.getElementById('appSub').textContent = USER.username;
+    document.getElementById('bottomNav').style.display = 'none';
+  }
+  loadData();
+}
+
+// ── DATA ──
+async function loadData() {
+  document.getElementById('mainContent').innerHTML = '<div class="spinner">⏳</div>';
+  try {
+    const p = new URLSearchParams({
+      token: TOKEN,
+      days_total: PARAMS.days_total,
+      forecast_pct: PARAMS.forecast_pct,
+      mode: PARAMS.mode,
+    });
+    if (PARAMS.day_report) p.append('day_report', PARAMS.day_report);
+    const res = await fetch(API + '/api/data?' + p);
+    if (res.status === 401) { doLogout(); return; }
+    DATA = await res.json();
+    document.getElementById('fileDateChip').textContent = DATA.file_date || '—';
+    renderView();
+  } catch (e) {
+    document.getElementById('mainContent').innerHTML = '<div class="empty">Ошибка загрузки данных.<br>Проверьте соединение.</div>';
+  }
+}
+
+function renderView() {
+  if (USER.role === 'director') {
+    renderDirectorView();
+  } else {
+    if (ADMIN_VIEW === 'summary') renderAdminSummary();
+    else if (ADMIN_VIEW === 'stores') renderAdminStores();
+    else if (ADMIN_VIEW === 'settings') renderSettings();
+  }
+}
+
+// ── DIRECTOR VIEW ──
+function renderDirectorView() {
+  const stores = DATA.stores || {};
+  const keys = Object.keys(stores);
+  if (!keys.length) {
+    document.getElementById('mainContent').innerHTML = '<div class="empty">Данные ещё не загружены.<br>Обратитесь к руководителю.</div>';
+    return;
+  }
+  const s = stores[keys[0]];
+  const pcolor = s.fact_plan_pct >= 100 ? '#1a9e6e' : s.fact_plan_pct >= 90 ? '#c07c00' : '#c0392b';
+  const pbadge = s.fact_plan_pct >= 100 ? 'b-ok' : s.fact_plan_pct >= 90 ? 'b-warn' : 'b-err';
+  const eclass = s.fot_eff > 15 ? 'err' : s.fot_eff > 12 ? 'warn' : 'ok';
+
+  // Группировка сотрудников
+  const groups = { 'Директор': [], 'Администратор': [], 'Продавец': [] };
+  (s.staff || []).forEach(emp => {
+    const g = emp.role.includes('Директор') ? 'Директор' : emp.role.includes('Администратор') ? 'Администратор' : 'Продавец';
+    groups[g].push(emp);
+  });
+
+  let staffHtml = '';
+  for (const [grp, emps] of Object.entries(groups)) {
+    if (!emps.length) continue;
+    staffHtml += `<div class="staff-group">${grp}</div>`;
+    emps.forEach(emp => {
+      staffHtml += `<div class="staff-row">
+        <div class="staff-name">
+          <div>${emp.name}</div>
+          <div class="staff-rate">Ставка: ${fmt(emp.rate)}</div>
+        </div>
+        <div>
+          <div class="staff-salary">${fmt(emp.forecast_salary)}</div>
+          <div class="staff-fact">факт: ${fmt(emp.fact_income)}</div>
+        </div>
+      </div>`;
+    });
+  }
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">${s.store_name}</div>
+
+    <div class="card">
+      <div class="progress-row">
+        <span>Выполнение плана</span>
+        <span class="badge ${pbadge}">${s.fact_plan_pct}%</span>
+      </div>
+      <div class="progress-bar" style="margin-bottom:12px">
+        <div class="progress-fill" style="width:${Math.min(100,s.fact_plan_pct)}%;background:${pcolor}"></div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">Факт ТО</div>
+          <div class="metric-value" style="font-size:16px">${fmt(s.fact_to)}</div>
+          <div class="metric-sub">из ${fmt(s.plan)}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Прогноз ТО</div>
+          <div class="metric-value" style="font-size:16px">${fmt(s.forecast_to)}</div>
+          <div class="metric-sub">${s.forecast_plan_pct}% плана</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Прогноз ФОТ на месяц</div>
+    <div class="card">
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">Коэффициент ЗП</div>
+          <div class="metric-value">${s.coef.toFixed(2)}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">ФОТ / ТО</div>
+          <div class="metric-value ${eclass}">${fmtp(s.fot_eff)}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Факт ФОТ</div>
+          <div class="metric-value" style="font-size:16px">${fmt(s.fact_fot)}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Прогноз ФОТ</div>
+          <div class="metric-value" style="font-size:16px">${fmt(s.forecast_fot)}</div>
+        </div>
+      </div>
+      <div style="background:#fff8e6;border-radius:10px;padding:12px;text-align:center;margin-top:4px">
+        <div style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Остаток к начислению</div>
+        <div style="font-size:22px;font-weight:700;color:var(--warn)">${fmt(s.rest_fot)}</div>
+      </div>
+    </div>
+
+    <div class="section-label">Сотрудники — прогноз ЗП</div>
+    <div class="card">${staffHtml || '<div class="empty">Нет данных по сотрудникам</div>'}</div>
+
+    <div class="section-label">Дополнительные расходы</div>
+    <div class="card">
+      <div class="staff-row" style="border-bottom:none">
+        <div class="staff-name">Клининг + погрузка</div>
+        <div class="staff-salary">${fmt(s.extra)}</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:8px">
+      <button onclick="showParams()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer">
+        ⚙️ Параметры прогноза
+      </button>
+    </div>
+    <div id="paramsPanel" style="display:none;margin-top:12px"></div>
+  `;
+}
+
+function showParams() {
+  const panel = document.getElementById('paramsPanel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="card">
+      <div class="params-row"><label>Дней в месяце:</label><input type="number" id="p_dt" value="${PARAMS.days_total}" min="28" max="31"></div>
+      <div class="params-row"><label>День отчёта:</label><input type="number" id="p_dr" value="${DATA.day_report || ''}" min="1" max="31" placeholder="авто"></div>
+      <div class="params-row"><label>% плана:</label><input type="number" id="p_fp" value="${PARAMS.forecast_pct}" min="50" max="150"></div>
+      <div class="params-row"><label>Режим:</label>
+        <select id="p_mode">
+          <option value="avg" ${PARAMS.mode==='avg'?'selected':''}>Экстраполяция</option>
+          <option value="plan" ${PARAMS.mode==='plan'?'selected':''}>По % плана</option>
+        </select>
+      </div>
+      <button class="btn-recalc" onclick="applyParams()">Пересчитать</button>
+    </div>`;
+}
+
+function applyParams() {
+  PARAMS.days_total = parseInt(document.getElementById('p_dt').value) || 31;
+  const dr = document.getElementById('p_dr').value;
+  PARAMS.day_report = dr ? parseInt(dr) : null;
+  PARAMS.forecast_pct = parseInt(document.getElementById('p_fp').value) || 100;
+  PARAMS.mode = document.getElementById('p_mode').value;
+  loadData();
+}
+
+// ── ADMIN SUMMARY ──
+function renderAdminSummary() {
+  const stores = Object.values(DATA.stores || {}).sort((a, b) => b.forecast_to - a.forecast_to);
+  if (!stores.length) {
+    document.getElementById('mainContent').innerHTML = '<div class="empty">Нет данных. Загрузите файл мотивации.</div>';
+    return;
+  }
+
+  const totFOT = stores.reduce((a, s) => a + s.forecast_fot, 0);
+  const totTO = stores.reduce((a, s) => a + s.forecast_to, 0);
+  const totFactTO = stores.reduce((a, s) => a + s.fact_to, 0);
+  const totFactFOT = stores.reduce((a, s) => a + s.fact_fot, 0);
+  const eff = totTO > 0 ? totFOT / totTO * 100 : 0;
+  const effClass = eff > 15 ? 'err' : eff > 12 ? 'warn' : 'ok';
+
+  let storesHtml = stores.map(s => {
+    const pbadge = s.fact_plan_pct >= 100 ? 'b-ok' : s.fact_plan_pct >= 90 ? 'b-warn' : 'b-err';
+    return `<div class="sum-row">
+      <div class="sum-store">${s.store_id}</div>
+      <div class="sum-name">${s.store_name}</div>
+      <div class="sum-right">
+        <div class="sum-fot">${fmt(s.forecast_fot)}</div>
+        <div class="sum-pct"><span class="badge ${pbadge}">${s.fact_plan_pct}%</span></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">Итого подразделение</div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-label">Факт ТО</div><div class="metric-value" style="font-size:16px">${fmt(totFactTO)}</div></div>
+      <div class="metric"><div class="metric-label">Прогноз ТО</div><div class="metric-value" style="font-size:16px">${fmt(totTO)}</div></div>
+      <div class="metric"><div class="metric-label">Факт ФОТ</div><div class="metric-value" style="font-size:16px">${fmt(totFactFOT)}</div></div>
+      <div class="metric"><div class="metric-label">Прогноз ФОТ</div><div class="metric-value" style="font-size:16px">${fmt(totFOT)}</div></div>
+    </div>
+    <div class="card" style="text-align:center;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">ПРОГНОЗ ФОТ/ТО</div>
+      <div class="metric-value ${effClass}" style="font-size:28px">${fmtp(eff)}</div>
+    </div>
+
+    <div class="section-label">По магазинам — прогноз ФОТ</div>
+    <div class="card">${storesHtml}</div>
+
+    <div style="text-align:center;margin-top:8px">
+      <button onclick="showAdminParams()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer">
+        ⚙️ Параметры прогноза
+      </button>
+    </div>
+    <div id="adminParamsPanel" style="display:none;margin-top:12px"></div>
+  `;
+}
+
+function showAdminParams() {
+  const panel = document.getElementById('adminParamsPanel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="card">
+      <div class="params-row"><label>Дней в месяце:</label><input type="number" id="p_dt" value="${PARAMS.days_total}" min="28" max="31"></div>
+      <div class="params-row"><label>% плана:</label><input type="number" id="p_fp" value="${PARAMS.forecast_pct}" min="50" max="150"></div>
+      <div class="params-row"><label>Режим:</label>
+        <select id="p_mode">
+          <option value="avg" ${PARAMS.mode==='avg'?'selected':''}>Экстраполяция</option>
+          <option value="plan" ${PARAMS.mode==='plan'?'selected':''}>По % плана</option>
+        </select>
+      </div>
+      <button class="btn-recalc" onclick="applyParams()">Пересчитать</button>
+    </div>`;
+}
+
+// ── ADMIN STORES ──
+function renderAdminStores() {
+  const stores = Object.values(DATA.stores || {}).sort((a, b) => b.forecast_to - a.forecast_to);
+  if (!stores.length) {
+    document.getElementById('mainContent').innerHTML = '<div class="empty">Нет данных.</div>';
+    return;
+  }
+
+  let html = '<div class="section-label">Выберите магазин</div>';
+  stores.forEach(s => {
+    const pbadge = s.fact_plan_pct >= 100 ? 'b-ok' : s.fact_plan_pct >= 90 ? 'b-warn' : 'b-err';
+    const pcolor = s.fact_plan_pct >= 100 ? '#1a9e6e' : s.fact_plan_pct >= 90 ? '#c07c00' : '#c0392b';
+
+    // Сотрудники
+    const groups = { 'Директор': [], 'Администратор': [], 'Продавец': [] };
+    (s.staff || []).forEach(emp => {
+      const g = emp.role.includes('Директор') ? 'Директор' : emp.role.includes('Администратор') ? 'Администратор' : 'Продавец';
+      groups[g].push(emp);
+    });
+    let staffHtml = '';
+    for (const [grp, emps] of Object.entries(groups)) {
+      if (!emps.length) continue;
+      staffHtml += `<div class="staff-group">${grp}</div>`;
+      emps.forEach(emp => {
+        staffHtml += `<div class="staff-row">
+          <div class="staff-name"><div>${emp.name}</div><div class="staff-rate">Ставка: ${fmt(emp.rate)}</div></div>
+          <div><div class="staff-salary">${fmt(emp.forecast_salary)}</div><div class="staff-fact">факт: ${fmt(emp.fact_income)}</div></div>
+        </div>`;
+      });
+    }
+
+    html += `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <span style="font-weight:700;font-size:15px">${s.store_id}</span>
+          <span style="color:var(--muted);font-size:13px;margin-left:6px">${s.store_name}</span>
+        </div>
+        <span class="badge ${pbadge}">${s.fact_plan_pct}%</span>
+      </div>
+      <div class="progress-bar" style="margin-bottom:10px">
+        <div class="progress-fill" style="width:${Math.min(100,s.fact_plan_pct)}%;background:${pcolor}"></div>
+      </div>
+      <div class="metrics-grid" style="margin-bottom:10px">
+        <div class="metric"><div class="metric-label">Факт ТО</div><div class="metric-value" style="font-size:14px">${fmt(s.fact_to)}</div></div>
+        <div class="metric"><div class="metric-label">Прогноз ФОТ</div><div class="metric-value" style="font-size:14px">${fmt(s.forecast_fot)}</div></div>
+        <div class="metric"><div class="metric-label">Коэф. ЗП</div><div class="metric-value">${s.coef.toFixed(2)}</div></div>
+        <div class="metric"><div class="metric-label">Остаток</div><div class="metric-value warn" style="font-size:14px">${fmt(s.rest_fot)}</div></div>
+      </div>
+      ${staffHtml}
+    </div>`;
+  });
+
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+// ── SETTINGS (admin) ──
+function renderSettings() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">Загрузка файла мотивации</div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Загружайте ежедневный .xlsx файл мотивации. Данные обновятся для всех директоров.</div>
+      <input type="file" id="uploadFile" accept=".xlsx,.xls" style="display:none" onchange="uploadFile()">
+      <button class="btn-recalc" onclick="document.getElementById('uploadFile').click()">📂 Выбрать файл мотивации</button>
+      <div id="uploadStatus" style="margin-top:10px;font-size:13px;text-align:center;color:var(--muted)"></div>
+    </div>
+
+    <div class="section-label">История загрузок</div>
+    <div class="card" id="uploadsHistory"><div class="empty">Загрузка...</div></div>
+
+    <div class="section-label">Управление пользователями</div>
+    <div class="card" id="usersPanel"><div class="empty">Загрузка...</div></div>
+
+    <div class="section-label">Добавить пользователя</div>
+    <div class="card">
+      <div class="params-row"><label>Логин:</label><input type="text" id="newLogin" placeholder="логин"></div>
+      <div class="params-row"><label>Пин-код:</label><input type="password" id="newPin" placeholder="1234" inputmode="numeric"></div>
+      <div class="params-row"><label>Роль:</label>
+        <select id="newRole">
+          <option value="director">Директор</option>
+          <option value="admin">Администратор</option>
+        </select>
+      </div>
+      <div class="params-row"><label>Магазин:</label>
+        <select id="newStore">
+          <option value="">— не назначен —</option>
+          ${Object.entries({15159:'Пушкино',15003:'Чехов',15023:'Раменское',15171:'Видное',15141:'Жуковский',15147:'Янтарь',15222:'Круг',15145:'Серпухов',15170:'Коломна',15191:'Облака',15203:'Ивантеевка',15221:'Кузьминки'})
+            .map(([id,n])=>`<option value="${id}">${id} ${n}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn-recalc" onclick="createUser()">Создать пользователя</button>
+      <div id="userCreateStatus" style="margin-top:8px;font-size:13px;text-align:center"></div>
+    </div>
+  `;
+  loadUploads();
+  loadUsers();
+}
+
+async function uploadFile() {
+  const file = document.getElementById('uploadFile').files[0];
+  if (!file) return;
+  const status = document.getElementById('uploadStatus');
+  status.textContent = '⏳ Загрузка...';
+  const fd = new FormData();
+  fd.append('token', TOKEN);
+  fd.append('file', file);
+  try {
+    const res = await fetch(API + '/api/admin/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok) {
+      status.style.color = 'var(--green)';
+      status.textContent = `✓ Загружено: ${data.file_date}, магазинов: ${data.stores_count}`;
+      loadUploads();
+    } else {
+      status.style.color = 'var(--red)';
+      status.textContent = '✗ Ошибка загрузки';
+    }
+  } catch {
+    status.style.color = 'var(--red)';
+    status.textContent = '✗ Ошибка соединения';
+  }
+}
+
+async function loadUploads() {
+  const el = document.getElementById('uploadsHistory');
+  if (!el) return;
+  const res = await fetch(API + '/api/admin/uploads?token=' + TOKEN);
+  const data = await res.json();
+  if (!data.length) { el.innerHTML = '<div class="empty">Нет загрузок</div>'; return; }
+  el.innerHTML = data.map(u => `
+    <div class="staff-row">
+      <div class="staff-name">📅 ${u.file_date}</div>
+      <div style="font-size:11px;color:var(--muted)">${u.upload_date.split('T')[0]}</div>
+    </div>`).join('');
+}
+
+async function loadUsers() {
+  const el = document.getElementById('usersPanel');
+  if (!el) return;
+  const res = await fetch(API + '/api/admin/users?token=' + TOKEN);
+  const data = await res.json();
+  el.innerHTML = data.map(u => `
+    <div class="staff-row">
+      <div class="staff-name">
+        <div>${u.username} <span class="badge ${u.role==='admin'?'b-info':'b-ok'}">${u.role}</span></div>
+        <div class="staff-rate">${u.store_id ? 'Магазин ' + u.store_id : 'Все магазины'}</div>
+      </div>
+      ${u.role !== 'admin' ? `<button onclick="deleteUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">Удалить</button>` : ''}
+    </div>`).join('') || '<div class="empty">Нет пользователей</div>';
+}
+
+async function createUser() {
+  const status = document.getElementById('userCreateStatus');
+  const fd = new FormData();
+  fd.append('token', TOKEN);
+  fd.append('username', document.getElementById('newLogin').value.trim());
+  fd.append('pin', document.getElementById('newPin').value.trim());
+  fd.append('role', document.getElementById('newRole').value);
+  fd.append('store_id', document.getElementById('newStore').value);
+  const res = await fetch(API + '/api/admin/users', { method: 'POST', body: fd });
+  if (res.ok) {
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ Пользователь создан';
+    loadUsers();
+  } else {
+    const err = await res.json();
+    status.style.color = 'var(--red)';
+    status.textContent = '✗ ' + (err.detail || 'Ошибка');
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Удалить пользователя?')) return;
+  await fetch(API + '/api/admin/users/' + id + '?token=' + TOKEN, { method: 'DELETE' });
+  loadUsers();
+}
+
+function setAdminView(v) {
+  ADMIN_VIEW = v;
+  ['summary','stores','settings'].forEach(n => {
+    document.getElementById('nav-' + n)?.classList.toggle('active', n === v);
+  });
+  renderView();
+}
+
+// ── INIT ──
+document.getElementById('pinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+if (TOKEN && USER) {
+  showApp();
+} else {
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
