@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ФОТ КК">
+<meta name="theme-color" content="#1a56c0">
+<title>ФОТ — Москва 2 КК</title>
+<link rel="manifest" href="/static/manifest.json">
+<style>
+:root {
+  --blue: #1a56c0; --blue-light: #e8f0fe; --blue-dark: #1240a0;
+  --green: #1a9e6e; --green-light: #e6f9f1;
+  --amber: #c07c00; --amber-light: #fff8e6;
+  --red: #c0392b; --red-light: #fdecea;
+  --gray: #888; --gray-light: #f5f5f5; --border: #e0e0e0;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: var(--gray-light); color: #1a1a1a; font-size: 15px; min-height: 100vh; }
+
+/* ── Шапка ── */
+.header { background: var(--blue); color: #fff; padding: calc(var(--safe-top) + 12px) 16px 12px;
+  display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.header-title { font-size: 16px; font-weight: 600; }
+.header-sub { font-size: 11px; opacity: .75; margin-top: 2px; }
+.header-btn { background: rgba(255,255,255,.15); border: none; color: #fff;
+  padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+/* ── Экраны ── */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── Логин ── */
+.login-wrap { min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 24px; }
+.login-logo { font-size: 48px; margin-bottom: 12px; }
+.login-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; color: var(--blue); }
+.login-sub { font-size: 14px; color: var(--gray); margin-bottom: 32px; text-align: center; }
+.pin-display { display: flex; gap: 10px; margin-bottom: 24px; justify-content: center; }
+.pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--blue);
+  transition: background .15s; }
+.pin-dot.filled { background: var(--blue); }
+.pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  max-width: 280px; width: 100%; }
+.pin-key { height: 64px; border-radius: 12px; border: 1.5px solid var(--border);
+  background: #fff; font-size: 22px; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: background .1s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.pin-key:active { background: var(--blue-light); }
+.pin-key.del { font-size: 18px; color: var(--gray); }
+.pin-key.submit { background: var(--blue); color: #fff; border-color: var(--blue); }
+.pin-key.submit:active { background: var(--blue-dark); }
+.pin-error { color: var(--red); font-size: 13px; text-align: center; margin-top: 8px; min-height: 20px; }
+
+/* ── Контент ── */
+.content { padding: 12px 12px calc(var(--safe-bottom) + 12px); max-width: 600px; margin: 0 auto; }
+
+/* ── Карточки ── */
+.card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px;
+  border: 1px solid var(--border); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--gray);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+
+/* ── Метрики ── */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.metric { background: var(--gray-light); border-radius: 8px; padding: 10px; }
+.metric-label { font-size: 10px; color: var(--gray); text-transform: uppercase;
+  letter-spacing: .04em; margin-bottom: 4px; }
+.metric-value { font-size: 18px; font-weight: 700; }
+.metric-value.ok { color: var(--green); }
+.metric-value.warn { color: var(--amber); }
+.metric-value.err { color: var(--red); }
+.metrics-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* ── Прогресс-бар ── */
+.pb-wrap { margin-bottom: 12px; }
+.pb-header { display: flex; justify-content: space-between; font-size: 12px;
+  color: var(--gray); margin-bottom: 5px; }
+.pb-header span { font-weight: 600; }
+.pb { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+.pf { height: 100%; border-radius: 4px; transition: width .4s; }
+
+/* ── Таблица сотрудников ── */
+.staff-group { font-size: 11px; font-weight: 600; color: var(--gray);
+  text-transform: uppercase; letter-spacing: .04em; padding: 6px 0 3px;
+  border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.staff-row { display: flex; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0; }
+.staff-row:last-child { border-bottom: none; }
+.staff-name { flex: 1; font-size: 13px; }
+.staff-rate { font-size: 11px; color: var(--gray); }
+.staff-sal { font-size: 14px; font-weight: 600; color: var(--blue); min-width: 90px; text-align: right; }
+.staff-extra { color: var(--gray); font-size: 12px; }
+.staff-total { background: var(--gray-light); border-radius: 6px; padding: 8px 10px;
+  display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.staff-total-label { font-size: 12px; font-weight: 600; }
+.staff-total-val { font-size: 16px; font-weight: 700; color: var(--blue); }
+
+/* ── Бейджи ── */
+.badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px;
+  border-radius: 4px; }
+.b-ok { background: var(--green-light); color: var(--green); }
+.b-warn { background: var(--amber-light); color: var(--amber); }
+.b-err { background: var(--red-light); color: var(--red); }
+.b-info { background: var(--blue-light); color: var(--blue); }
+
+/* ── Коэф ── */
+.coef-badge { background: var(--blue-light); color: var(--blue); font-size: 13px;
+  font-weight: 700; padding: 4px 10px; border-radius: 6px; display: inline-block; }
+
+/* ── Параметры прогноза ── */
+.params-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.param-item { flex: 1; min-width: 100px; }
+.param-item label { font-size: 11px; color: var(--gray); display: block; margin-bottom: 3px; }
+.param-item input, .param-item select { width: 100%; padding: 7px 8px; border: 1px solid var(--border);
+  border-radius: 6px; font-size: 14px; background: #fff; }
+
+/* ── Кнопки ── */
+.btn { display: block; width: 100%; padding: 13px; border-radius: 10px; border: none;
+  font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:active { background: var(--blue-dark); }
+.btn-outline { background: #fff; color: var(--blue); border: 1.5px solid var(--blue); }
+.btn-danger { background: var(--red-light); color: var(--red); border: none; }
+.btn + .btn { margin-top: 8px; }
+
+/* ── Список магазинов (admin) ── */
+.store-item { display: flex; align-items: center; padding: 12px 0;
+  border-bottom: 1px solid var(--border); cursor: pointer; }
+.store-item:last-child { border-bottom: none; }
+.store-id { width: 52px; font-size: 12px; font-weight: 700; color: var(--blue); }
+.store-info { flex: 1; }
+.store-name { font-size: 14px; font-weight: 500; }
+.store-meta { font-size: 12px; color: var(--gray); margin-top: 2px; }
+.store-arrow { color: #ccc; font-size: 18px; }
+
+/* ── Форма ── */
+.form-row { margin-bottom: 12px; }
+.form-row label { font-size: 13px; color: var(--gray); display: block; margin-bottom: 4px; }
+.form-row input, .form-row select { width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 15px; background: #fff; }
+.form-row input:focus, .form-row select:focus { outline: none; border-color: var(--blue); }
+
+/* ── Upload ── */
+.upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 24px;
+  text-align: center; color: var(--gray); margin-bottom: 12px; }
+.upload-zone.ok { border-color: var(--green); color: var(--green); background: var(--green-light); }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-text { font-size: 14px; font-weight: 500; }
+.upload-sub { font-size: 12px; margin-top: 4px; opacity: .7; }
+
+/* ── Users list ── */
+.user-item { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.user-item:last-child { border-bottom: none; }
+.user-info { flex: 1; }
+.user-name { font-size: 14px; font-weight: 500; }
+.user-meta { font-size: 12px; color: var(--gray); }
+.user-del { color: var(--red); background: var(--red-light); border: none; padding: 5px 10px;
+  border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+/* ── Навигация admin ── */
+.admin-nav { display: flex; gap: 6px; margin-bottom: 12px; }
+.admin-nav button { flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; font-size: 12px; cursor: pointer; color: var(--gray); font-weight: 500; }
+.admin-nav button.active { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+
+/* ── Сводная таблица ── */
+.sum-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+.sum-row:last-child { border-bottom: none; }
+.sum-sid { width: 46px; font-size: 12px; font-weight: 700; color: var(--blue); }
+.sum-name { flex: 1; font-size: 13px; }
+.sum-right { text-align: right; }
+.sum-fot { font-size: 14px; font-weight: 700; }
+.sum-pct { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+/* ── Лог загрузок ── */
+.log-item { display: flex; justify-content: space-between; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.log-item:last-child { border-bottom: none; }
+.log-date { font-weight: 600; }
+.log-meta { color: var(--gray); font-size: 12px; }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: calc(var(--safe-bottom) + 16px); left: 50%; transform: translateX(-50%);
+  background: #222; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px;
+  opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+.loading { text-align: center; padding: 40px; color: var(--gray); font-size: 14px; }
+.empty { text-align: center; padding: 32px; color: var(--gray); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ══ Экран логина ══════════════════════════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-logo">🏪</div>
+    <div class="login-title">ФОТ Калькулятор</div>
+    <div class="login-sub">Москва 2 КК — введите пин-код</div>
+    <div class="pin-display" id="pin-display">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+      <div class="pin-dot" id="d4"></div>
+      <div class="pin-dot" id="d5"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key submit" onclick="pinSubmit()">→</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- ══ Шапка (видна везде кроме логина) ═════════════════════════════════════ -->
+<div id="app-header" style="display:none">
+  <div class="header">
+    <div>
+      <div class="header-title" id="header-title">ФОТ КК</div>
+      <div class="header-sub" id="header-sub"></div>
+    </div>
+    <button class="header-btn" onclick="logout()">Выйти</button>
+  </div>
+</div>
+
+<!-- ══ Экран директора ═══════════════════════════════════════════════════════ -->
+<div id="screen-director" class="screen">
+  <div class="content">
+
+    <div class="card">
+      <div class="card-title">Параметры</div>
+      <div class="params-row">
+        <div class="param-item">
+          <label>Дней в месяце</label>
+          <input type="number" id="d-days" value="31" min="28" max="31">
+        </div>
+        <div class="param-item">
+          <label>Режим прогноза</label>
+          <select id="d-mode">
+            <option value="avg">Экстраполяция</option>
+            <option value="plan">По % плана</option>
+          </select>
+        </div>
+        <div class="param-item" id="d-pct-wrap" style="display:none">
+          <label>% плана</label>
+          <input type="number" id="d-pct" value="100" min="50" max="150">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="loadDirectorData()">Обновить</button>
+    </div>
+
+    <div id="director-content">
+      <div class="loading">Загрузка данных...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ Экран администратора ══════════════════════════════════════════════════ -->
+<div id="screen-admin" class="screen">
+  <div class="content">
+    <div class="admin-nav">
+      <button id="atab-summary" class="active" onclick="adminTab('summary')">Сводка</button>
+      <button id="atab-upload" onclick="adminTab('upload')">Загрузка</button>
+      <button id="atab-users" onclick="adminTab('users')">Директора</button>
+    </div>
+
+    <!-- Сводка -->
+    <div id="admin-summary">
+      <div class="card">
+        <div class="card-title">Параметры прогноза</div>
+        <div class="params-row">
+          <div class="param-item">
+            <label>Дней в месяце</label>
+            <input type="number" id="a-days" value="31" min="28" max="31">
+          </div>
+          <div class="param-item">
+            <label>Режим</label>
+            <select id="a-mode">
+              <option value="avg">Экстраполяция</option>
+              <option value="plan">По % плана</option>
+            </select>
+          </div>
+          <div class="param-item" id="a-pct-wrap" style="display:none">
+            <label>% плана</label>
+            <input type="number" id="a-pct" value="100" min="50" max="150">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadSummary()">Обновить</button>
+      </div>
+      <div id="summary-totals" style="margin-bottom:10px"></div>
+      <div class="card">
+        <div class="card-title">Магазины</div>
+        <div id="summary-list"><div class="loading">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <!-- Загрузка файла -->
+    <div id="admin-upload" style="display:none">
+      <div class="card">
+        <div class="card-title">Загрузка файла мотивации</div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('xlsx-input').click()">
+          <div class="upload-icon">📂</div>
+          <div class="upload-text">Нажмите для выбора файла</div>
+          <div class="upload-sub">Ежедневный .xlsx из системы мотивации</div>
+        </div>
+        <input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this)">
+        <div id="upload-result"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">История загрузок</div>
+        <div id="upload-log"><div class="loading">...</div></div>
+      </div>
+    </div>
+
+    <!-- Управление директорами -->
+    <div id="admin-users" style="display:none">
+      <div class="card">
+        <div class="card-title">Добавить директора</div>
+        <div class="form-row"><label>Имя</label><input type="text" id="new-name" placeholder="Фамилия Имя"></div>
+        <div class="form-row">
+          <label>Магазин</label>
+          <select id="new-store"><option value="">— выберите —</option></select>
+        </div>
+        <div class="form-row"><label>Пин-код (мин. 4 цифры)</label><input type="number" id="new-pin" placeholder="например: 7841"></div>
+        <button class="btn btn-primary" onclick="createUser()">Добавить</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Список директоров</div>
+        <div id="users-list"><div class="loading">...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Экран детализации магазина (для admin) ════════════════════════════════ -->
+<div id="screen-store" class="screen">
+  <div class="content">
+    <div id="store-detail-content"><div class="loading">Загрузка...</div></div>
+    <button class="btn btn-outline" onclick="backToAdmin()" style="margin-top:4px">← Назад</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let token = localStorage.getItem('token');
+let currentUser = null;
+let storesList = [];
+
+// ── Утилиты ────────────────────────────────────────────────────────────────
+const f = n => Math.round(n).toLocaleString('ru-RU') + ' ₽';
+const fp = n => n.toFixed(1) + '%';
+
+function toast(msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API + path, { ...opts, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || 'Ошибка сервера');
+  return data;
+}
+
+async function apiUpload(path, formData) {
+  const res = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: formData
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || 'Ошибка загрузки');
+  return data;
+}
+
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screenId).classList.add('active');
+  const isLogin = screenId === 'login';
+  document.getElementById('app-header').style.display = isLogin ? 'none' : 'block';
+}
+
+// ── Пин-код ────────────────────────────────────────────────────────────────
+let pinValue = '';
+
+function updateDots() {
+  for (let i = 0; i < 6; i++) {
+    document.getElementById('d' + i).classList.toggle('filled', i < pinValue.length);
+  }
+}
+
+function pinKey(k) {
+  if (pinValue.length >= 6) return;
+  pinValue += k;
+  updateDots();
+  document.getElementById('pin-error').textContent = '';
+  if (pinValue.length === 6) setTimeout(pinSubmit, 150);
+}
+
+function pinDel() {
+  pinValue = pinValue.slice(0, -1);
+  updateDots();
+}
+
+async function pinSubmit() {
+  if (!pinValue) return;
+  try {
+    const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ pin: pinValue }) });
+    token = data.token;
+    localStorage.setItem('token', token);
+    currentUser = data;
+    afterLogin();
+  } catch (e) {
+    document.getElementById('pin-error').textContent = e.message;
+    pinValue = '';
+    updateDots();
+  }
+}
+
+function afterLogin() {
+  document.getElementById('header-title').textContent =
+    currentUser.role === 'admin' ? 'Администратор' : (currentUser.store_name || currentUser.name);
+  document.getElementById('header-sub').textContent = currentUser.name;
+
+  if (currentUser.role === 'admin') {
+    show('admin');
+    loadStoresList();
+    loadSummary();
+    loadUploadLog();
+  } else {
+    show('director');
+    loadDirectorData();
+  }
+}
+
+function logout() {
+  api('/api/logout', { method: 'POST' }).catch(() => {});
+  token = null;
+  currentUser = null;
+  localStorage.removeItem('token');
+  pinValue = '';
+  updateDots();
+  show('login');
+}
+
+// ── Данные директора ───────────────────────────────────────────────────────
+async function loadDirectorData() {
+  if (!currentUser?.store_id) return;
+  const days = document.getElementById('d-days').value;
+  const mode = document.getElementById('d-mode').value;
+  const pct = document.getElementById('d-pct').value;
+  const el = document.getElementById('director-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const d = await api(`/api/store/${currentUser.store_id}?days_total=${days}&mode=${mode}&forecast_pct=${pct}`);
+    if (d.no_data) { el.innerHTML = '<div class="empty">Данные ещё не загружены.<br>Обратитесь к руководителю.</div>'; return; }
+    el.innerHTML = renderStoreDetail(d);
+  } catch (e) {
+    el.innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function renderStoreDetail(d) {
+  const pctW = Math.min(100, d.fact_plan_pct).toFixed(0);
+  const pcolor = d.fact_plan_pct >= 100 ? '#1a9e6e' : d.fact_plan_pct >= 90 ? '#c07c00' : '#c0392b';
+  const pc = d.fact_plan_pct >= 100 ? 'b-ok' : d.fact_plan_pct >= 90 ? 'b-warn' : 'b-err';
+  const ec = d.fot_to_pct > 15 ? 'err' : d.fot_to_pct > 12 ? 'warn' : 'ok';
+
+  // Группируем сотрудников
+  const groups = { 'Директор': [], 'Администратор': [], 'Продавец': [] };
+  (d.staff || []).forEach(emp => {
+    const g = emp.role.includes('Директор') ? 'Директор' : emp.role.includes('Администратор') ? 'Администратор' : 'Продавец';
+    groups[g].push(emp);
+  });
+
+  let staffHtml = '';
+  Object.entries(groups).forEach(([grp, emps]) => {
+    if (!emps.length) return;
+    staffHtml += `<div class="staff-group">${grp}</div>`;
+    emps.forEach(e => {
+      staffHtml += `<div class="staff-row">
+        <div class="staff-info" style="flex:1">
+          <div class="staff-name">${e.name}</div>
+          <div class="staff-rate">${f(e.rate)} × ${d.coef.toFixed(2)}</div>
+        </div>
+        <div class="staff-sal">${f(e.forecast_salary)}</div>
+      </div>`;
+    });
+  });
+
+  return `
+  <div class="card">
+    <div class="pb-wrap">
+      <div class="pb-header">
+        <span>Выполнение плана</span>
+        <span class="${pc}">${d.fact_plan_pct.toFixed(1)}%</span>
+      </div>
+      <div class="pb"><div class="pf" style="width:${pctW}%;background:${pcolor}"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#888">
+        <span>Дата отчёта: <b>${d.report_date}</b></span>
+        <span>Коэф. ЗП: <span class="coef-badge">${d.coef.toFixed(2)}</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Факт ТО</div><div class="metric-value">${f(d.fact_to)}</div></div>
+    <div class="metric"><div class="metric-label">План</div><div class="metric-value">${f(d.plan)}</div></div>
+    <div class="metric"><div class="metric-label">Прогноз ТО</div><div class="metric-value">${f(d.forecast_to)}</div></div>
+    <div class="metric"><div class="metric-label">Прогноз % плана</div><div class="metric-value">${fp(d.forecast_plan_pct)}</div></div>
+    <div class="metric"><div class="metric-label">Факт ФОТ</div><div class="metric-value">${f(d.fact_fot)}</div></div>
+    <div class="metric"><div class="metric-label">Остаток к начисл.</div><div class="metric-value warn">${f(d.rest_fot)}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Начисления по сотрудникам</div>
+    ${staffHtml}
+    <div class="staff-row staff-extra">
+      <div class="staff-name" style="color:#888">Клининг + погрузка</div>
+      <div class="staff-sal" style="color:#888">${f(d.extra)}</div>
+    </div>
+    <div class="staff-total">
+      <div class="staff-total-label">Итого ФОТ (прогноз)</div>
+      <div class="staff-total-val">${f(d.forecast_fot)}</div>
+    </div>
+    <div style="text-align:right;margin-top:6px;font-size:12px">
+      ФОТ/ТО: <span class="${ec}">${fp(d.fot_to_pct)}</span>
+    </div>
+  </div>`;
+}
+
+// ── Режим прогноза ─────────────────────────────────────────────────────────
+document.getElementById('d-mode').addEventListener('change', function() {
+  document.getElementById('d-pct-wrap').style.display = this.value === 'plan' ? 'block' : 'none';
+});
+document.getElementById('a-mode').addEventListener('change', function() {
+  document.getElementById('a-pct-wrap').style.display = this.value === 'plan' ? 'block' : 'none';
+});
+
+// ── Admin: сводка ──────────────────────────────────────────────────────────
+async function loadSummary() {
+  const days = document.getElementById('a-days').value;
+  const mode = document.getElementById('a-mode').value;
+  const pct = document.getElementById('a-pct').value;
+  document.getElementById('summary-list').innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const data = await api(`/api/admin/uploads?token=${token}`);
+    if (!data.length) { document.getElementById('summary-list').innerHTML = '<div class="empty">Данные не загружены</div>'; return; }
+
+    const totTO = data.reduce((a, r) => a + (r.forecast_to || 0), 0);
+    const totFOT = data.reduce((a, r) => a + (r.forecast_fot || 0), 0);
+    const totFact = data.reduce((a, r) => a + (r.fact_to || 0), 0);
+    const totFactFOT = data.reduce((a, r) => a + (r.fact_fot || 0), 0);
+    const effPct = totTO > 0 ? totFOT / totTO * 100 : 0;
+
+    document.getElementById('summary-totals').innerHTML = `
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Факт ТО</div><div class="metric-value">${f(totFact)}</div></div>
+        <div class="metric"><div class="metric-label">Прогноз ТО</div><div class="metric-value">${f(totTO)}</div></div>
+        <div class="metric"><div class="metric-label">Факт ФОТ</div><div class="metric-value">${f(totFactFOT)}</div></div>
+        <div class="metric"><div class="metric-label">Прогноз ФОТ</div><div class="metric-value">${f(totFOT)}</div></div>
+      </div>`;
+
+    document.getElementById('summary-list').innerHTML = data.map(r => {
+      const pc = (r.fact_plan_pct || 0) >= 100 ? 'b-ok' : (r.fact_plan_pct || 0) >= 90 ? 'b-warn' : 'b-err';
+      const ec = (r.fot_to_pct || 0) > 15 ? 'err' : (r.fot_to_pct || 0) > 12 ? 'warn' : 'ok';
+      return `<div class="sum-row" onclick="showStoreDetail(${r.store_id})">
+        <div class="sum-sid">${r.store_id || ''}</div>
+        <div class="sum-info" style="flex:1">
+          <div class="sum-name">${r.store_name || r.file_date || '—'}</div>
+          <div style="margin-top:3px">
+            <span class="badge ${pc}">${(r.fact_plan_pct || 0).toFixed(0)}%</span>
+          </div>
+        </div>
+        <div class="sum-right">
+          <div class="sum-fot">${f(r.forecast_fot || 0)}</div>
+          <div class="sum-pct ${ec}">${fp(r.fot_to_pct || 0)}</div>
+        </div>
+        <div style="color:#ccc;font-size:18px;margin-left:6px">›</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('summary-list').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+async function showStoreDetail(storeId) {
+  const days = document.getElementById('a-days').value;
+  const mode = document.getElementById('a-mode').value;
+  const pct = document.getElementById('a-pct').value;
+  show('store');
+  const el = document.getElementById('store-detail-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const d = await api(`/api/store/${storeId}?days_total=${days}&mode=${mode}&forecast_pct=${pct}`);
+    el.innerHTML = `<div class="card" style="margin-bottom:8px">
+      <div style="font-size:16px;font-weight:700">${d.store_id} — ${d.name}</div>
+    </div>` + renderStoreDetail(d);
+  } catch (e) {
+    el.innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function backToAdmin() {
+  show('admin');
+  adminTab('summary');
+}
+
+// ── Admin: загрузка файла ──────────────────────────────────────────────────
+async function uploadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const zone = document.getElementById('upload-zone');
+  const res = document.getElementById('upload-result');
+  zone.innerHTML = '<div class="upload-icon">⏳</div><div class="upload-text">Загрузка...</div>';
+  res.innerHTML = '';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await apiUpload('/api/upload', fd);
+    zone.className = 'upload-zone ok';
+    zone.innerHTML = `<div class="upload-icon">✅</div>
+      <div class="upload-text">Загружено успешно</div>
+      <div class="upload-sub">${data.rows} строк · ${data.date}</div>`;
+    toast('Файл загружен: ' + data.rows + ' строк');
+    loadUploadLog();
+  } catch (e) {
+    zone.className = 'upload-zone';
+    zone.innerHTML = '<div class="upload-icon">📂</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Ежедневный .xlsx из системы мотивации</div>';
+    res.innerHTML = `<div style="color:var(--red);font-size:13px;margin-top:6px">${e.message}</div>`;
+  }
+  input.value = '';
+}
+
+async function loadUploadLog() {
+  const el = document.getElementById('upload-log');
+  try {
+    const logs = await api('/api/upload_log');
+    if (!logs.length) { el.innerHTML = '<div class="empty">Загрузок ещё не было</div>'; return; }
+    el.innerHTML = logs.map(l => `<div class="log-item">
+      <div><div class="log-date">${l.report_date || '—'}</div><div class="log-meta">${l.filename}</div></div>
+      <div style="text-align:right"><div class="log-date">${l.rows_count} строк</div>
+      <div class="log-meta">${(l.uploaded_at || '').split('T')[0]}</div></div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
+}
+
+// ── Admin: пользователи ────────────────────────────────────────────────────
+async function loadStoresList() {
+  try {
+    storesList = await api('/api/stores');
+    const sel = document.getElementById('new-store');
+    sel.innerHTML = '<option value="">— выберите магазин —</option>';
+    storesList.forEach(s => {
+      sel.innerHTML += `<option value="${s.id}">${s.id} — ${s.name}</option>`;
+    });
+  } catch (e) {}
+}
+
+async function loadUsers() {
+  const el = document.getElementById('users-list');
+  try {
+    const users = await api('/api/users');
+    const directors = users.filter(u => u.role === 'director');
+    if (!directors.length) { el.innerHTML = '<div class="empty">Директора не добавлены</div>'; return; }
+    el.innerHTML = directors.map(u => `<div class="user-item">
+      <div class="user-info">
+        <div class="user-name">${u.name}</div>
+        <div class="user-meta">${u.store_id ? `${u.store_id} — ${u.store_name || ''}` : 'Магазин не назначен'}</div>
+      </div>
+      <button class="user-del" onclick="deleteUser(${u.id}, '${u.name}')">Удалить</button>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function createUser() {
+  const name = document.getElementById('new-name').value.trim();
+  const store_id = document.getElementById('new-store').value;
+  const pin = document.getElementById('new-pin').value.trim();
+  if (!name || !pin) { toast('Заполните имя и пин-код'); return; }
+  try {
+    await api('/api/users', { method: 'POST', body: JSON.stringify({ name, store_id: store_id ? parseInt(store_id) : null, pin, role: 'director' }) });
+    toast('Директор добавлен');
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-pin').value = '';
+    document.getElementById('new-store').value = '';
+    loadUsers();
+  } catch (e) { toast(e.message); }
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`Удалить "${name}"?`)) return;
+  try {
+    await api(`/api/users/${id}`, { method: 'DELETE' });
+    toast('Удалён');
+    loadUsers();
+  } catch (e) { toast(e.message); }
+}
+
+// ── Admin навигация ────────────────────────────────────────────────────────
+function adminTab(tab) {
+  ['summary', 'upload', 'users'].forEach(t => {
+    document.getElementById('admin-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('atab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'users') loadUsers();
+  if (tab === 'upload') loadUploadLog();
+}
+
+// ── Автологин ──────────────────────────────────────────────────────────────
+async function tryAutoLogin() {
+  if (!token) return;
+  try {
+    const data = await api('/api/me');
+    currentUser = { ...data, token };
+    afterLogin();
+  } catch (e) {
+    token = null;
+    localStorage.removeItem('token');
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
+
+tryAutoLogin();
+</script>
+</body>
+</html>

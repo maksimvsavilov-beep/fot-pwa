@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "git-commit",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": ["C:/Users/User/.claude/debug/.claude/worktrees/gracious-stonebraker/.claude/git_commit.sh"],
+      "port": 8000
+    }
+  ]
+}

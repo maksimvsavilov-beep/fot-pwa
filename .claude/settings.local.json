@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unzip -l /c/Users/User/Desktop/claude/fot_pwa.zip)",
+      "Bash(unzip -l \"C:/Users/User/Desktop/claude/fot_pwa.zip\")",
+      "Bash(unzip -l fot_pwa.zip)",
+      "Bash(powershell -Command \"Expand-Archive -Path ''C:\\\\Users\\\\User\\\\Desktop\\\\claude\\\\fot_pwa.zip'' -DestinationPath ''C:\\\\Users\\\\User\\\\Desktop\\\\claude\\\\fot_pwa_extracted'' -Force; Write-Host ''Extraction complete''\")",
+      "Bash(powershell.exe -Command \"Expand-Archive -Path ''C:\\\\Users\\\\User\\\\Desktop\\\\claude\\\\fot_pwa.zip'' -DestinationPath ''C:\\\\Users\\\\User\\\\Desktop\\\\claude\\\\fot_pwa_extracted'' -Force; echo ''done''\")",
+      "Bash(python3 -c \"import zipfile; z = zipfile.ZipFile\\(''C:/Users/User/Desktop/claude/fot_pwa.zip''\\); print\\(''\\\\n''.join\\(z.namelist\\(\\)\\)\\)\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git -C \"C:/Users/User/.claude/debug/.claude/worktrees/gracious-stonebraker\" status)",
+      "Bash(git -C \"C:/Users/User/.claude/debug/.claude/worktrees/gracious-stonebraker\" log --oneline -5)",
+      "Bash(python -c \"import zipfile, os; z=zipfile.ZipFile\\(''C:/Users/User/Desktop/claude/fot_pwa.zip''\\); z.extractall\\(''C:/Users/User/.claude/debug/.claude/worktrees/gracious-stonebraker''\\); print\\(''done''\\)\")",
+      "Bash(python -c \"import subprocess, os; repo = ''C:/Users/User/.claude/debug/.claude/worktrees/gracious-stonebraker''; r = subprocess.run\\([''git'', ''status''], cwd=repo, capture_output=True, text=True\\); print\\(''STDOUT:'', r.stdout\\); print\\(''STDERR:'', r.stderr\\); print\\(''RC:'', r.returncode\\)\")"
+    ]
+  }
+}
