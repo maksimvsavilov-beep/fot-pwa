@@ -3,5 +3,5 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
-healthcheckPath = "/api/me"
+healthcheckPath = "/"
 restartPolicyType = "ON_FAILURE"

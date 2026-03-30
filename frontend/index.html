@@ -569,7 +569,7 @@ async function loadSummary() {
   const pct = document.getElementById('a-pct').value;
   document.getElementById('summary-list').innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    const data = await api(`/api/admin/uploads?token=${token}`);
+    const data = await api(`/api/summary?days_total=${days}&mode=${mode}&forecast_pct=${pct}`);
     if (!data.length) { document.getElementById('summary-list').innerHTML = '<div class="empty">Данные не загружены</div>'; return; }
 
     const totTO = data.reduce((a, r) => a + (r.forecast_to || 0), 0);
@@ -592,7 +592,7 @@ async function loadSummary() {
       return `<div class="sum-row" onclick="showStoreDetail(${r.store_id})">
         <div class="sum-sid">${r.store_id || ''}</div>
         <div class="sum-info" style="flex:1">
-          <div class="sum-name">${r.store_name || r.file_date || '—'}</div>
+          <div class="sum-name">${r.name || r.store_name || '—'}</div>
           <div style="margin-top:3px">
             <span class="badge ${pc}">${(r.fact_plan_pct || 0).toFixed(0)}%</span>
           </div>
@@ -649,6 +649,7 @@ async function uploadFile(input) {
       <div class="upload-sub">${data.rows} строк · ${data.date}</div>`;
     toast('Файл загружен: ' + data.rows + ' строк');
     loadUploadLog();
+    loadSummary();
   } catch (e) {
     zone.className = 'upload-zone';
     zone.innerHTML = '<div class="upload-icon">📂</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Ежедневный .xlsx из системы мотивации</div>';
@@ -728,6 +729,7 @@ function adminTab(tab) {
     document.getElementById('admin-' + t).style.display = t === tab ? 'block' : 'none';
     document.getElementById('atab-' + t).classList.toggle('active', t === tab);
   });
+  if (tab === 'summary') loadSummary();
   if (tab === 'users') loadUsers();
   if (tab === 'upload') loadUploadLog();
 }

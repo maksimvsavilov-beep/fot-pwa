@@ -2,7 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import sqlite3, hashlib, secrets, os, io
+import psycopg2
+import psycopg2.extras
+import hashlib, secrets, os, io
 from datetime import datetime, timedelta
 from typing import Optional
 import pandas as pd
@@ -17,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "fot.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ADMIN_PIN = os.environ.get("ADMIN_PIN", "admin1234")
 
 # ─── Справочник магазинов ────────────────────────────────────────────────────
@@ -36,17 +38,32 @@ STORE_DATA = {
     15221: {"name": "Кузьминки Молл",  "plan": 1512887, "sr": 60000, "ar": 75000,  "dr": 90000,  "dc": 1, "ac": 1, "sc": 2, "nc": 0,   "cl": 29000, "ld": 9000},
 }
 
-# ─── БД ─────────────────────────────────────────────────────────────────────
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# ─── БД (PostgreSQL) ─────────────────────────────────────────────────────────
+class DBConn:
+    """Wrapper making psycopg2 behave like sqlite3 for minimal code changes."""
+    def __init__(self, dsn):
+        self._conn = psycopg2.connect(dsn)
+
+    def execute(self, sql, params=None):
+        sql = sql.replace("?", "%s")
+        cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, params) if params else cur.execute(sql)
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+def get_db() -> DBConn:
+    return DBConn(DATABASE_URL)
 
 def init_db():
     conn = get_db()
-    conn.executescript("""
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             pin_hash TEXT NOT NULL,
             store_id INTEGER,
@@ -54,9 +71,11 @@ def init_db():
             token TEXT,
             token_expires TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS motivation_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             store_id INTEGER NOT NULL,
             report_date TEXT NOT NULL,
             login TEXT,
@@ -69,22 +88,25 @@ def init_db():
             is_total INTEGER DEFAULT 0,
             is_bezshk INTEGER DEFAULT 0,
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS upload_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             filename TEXT,
             report_date TEXT,
             rows_count INTEGER,
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
+        )
     """)
     conn.commit()
-    # Создаём admin если нет
     cur = conn.execute("SELECT id FROM users WHERE role='admin'")
     if not cur.fetchone():
         pin_hash = hashlib.sha256(ADMIN_PIN.encode()).hexdigest()
-        conn.execute("INSERT INTO users (name, pin_hash, store_id, role) VALUES (?, ?, NULL, 'admin')",
-                     ("Администратор", pin_hash))
+        conn.execute(
+            "INSERT INTO users (name, pin_hash, store_id, role) VALUES (?, ?, NULL, 'admin')",
+            ("Администратор", pin_hash)
+        )
         conn.commit()
     conn.close()
 
@@ -95,10 +117,10 @@ def hash_pin(pin: str) -> str:
     return hashlib.sha256(pin.strip().encode()).hexdigest()
 
 def plan_coef(pct: float) -> float:
-    if pct < 80:  return 0.70
-    if pct < 90:  return 0.80
-    if pct < 95:  return 0.90
-    if pct < 100: return 0.95
+    if pct < 80:   return 0.70
+    if pct < 90:   return 0.80
+    if pct < 95:   return 0.90
+    if pct < 100:  return 0.95
     if pct <= 105: return 1.00
     if pct <= 110: return 1.05
     if pct <= 120: return 1.10
@@ -181,7 +203,6 @@ async def upload_motivation(file: UploadFile = File(...), user=Depends(require_a
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {e}")
 
-    # Ищем строку заголовка
     header_row = None
     for i, row in df.iterrows():
         if str(row[0]).strip().startswith("Дата"):
@@ -208,7 +229,6 @@ async def upload_motivation(file: UploadFile = File(...), user=Depends(require_a
             income = float(row[9]) if str(row[9]) not in ["nan", ""] else 0
             fdm_val = float(row[10]) if str(row[10]) not in ["nan", ""] else 0
 
-            # Дата
             raw_date = row[0]
             if hasattr(raw_date, "strftime"):
                 rd = raw_date.strftime("%d.%m.%Y")
@@ -241,7 +261,6 @@ async def upload_motivation(file: UploadFile = File(...), user=Depends(require_a
 # ─── Данные магазина ──────────────────────────────────────────────────────────
 @app.get("/api/store/{store_id}")
 def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100, mode: str = "avg", user=Depends(require_auth)):
-    # Директор видит только свой магазин
     if user["role"] == "director" and user["store_id"] != store_id:
         raise HTTPException(status_code=403, detail="Нет доступа к этому магазину")
 
@@ -250,7 +269,6 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         raise HTTPException(status_code=404, detail="Магазин не найден")
 
     conn = get_db()
-    # Берём последние данные по этому магазину
     latest = conn.execute(
         "SELECT MAX(report_date) as d FROM motivation_data WHERE store_id=?", (store_id,)
     ).fetchone()
@@ -345,7 +363,7 @@ def get_users(user=Depends(require_admin)):
     conn.close()
     return [{"id": u["id"], "name": u["name"], "store_id": u["store_id"],
              "role": u["role"], "store_name": STORE_DATA.get(u["store_id"], {}).get("name") if u["store_id"] else None,
-             "created_at": u["created_at"]} for u in users]
+             "created_at": str(u["created_at"])} for u in users]
 
 @app.post("/api/users")
 def create_user(body: dict, user=Depends(require_admin)):
@@ -405,6 +423,19 @@ def upload_log(user=Depends(require_admin)):
 @app.get("/api/stores")
 def get_stores_list(user=Depends(require_admin)):
     return [{"id": k, "name": v["name"]} for k, v in STORE_DATA.items()]
+
+@app.get("/api/debug/store_ids")
+def debug_store_ids():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT DISTINCT store_id, report_date, COUNT(*) as cnt FROM motivation_data GROUP BY store_id, report_date"
+    ).fetchall()
+    conn.close()
+    known = list(STORE_DATA.keys())
+    return {
+        "in_db": [{"store_id": r["store_id"], "date": r["report_date"], "rows": r["cnt"], "in_store_data": r["store_id"] in known} for r in rows],
+        "store_data_ids": known
+    }
 
 # ─── Отдаём PWA ──────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
