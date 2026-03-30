@@ -569,7 +569,11 @@ async function uploadFile() {
     if (res.ok) {
       status.style.color = 'var(--green)';
       status.textContent = `✓ Загружено: ${data.file_date}, магазинов: ${data.stores_count}`;
-      loadUploads();
+      ADMIN_VIEW = 'summary';
+      ['summary','stores','settings'].forEach(n => {
+        document.getElementById('nav-' + n)?.classList.toggle('active', n === 'summary');
+      });
+      loadData();
     } else {
       status.style.color = 'var(--red)';
       status.textContent = '✗ Ошибка загрузки';
