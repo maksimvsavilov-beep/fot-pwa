@@ -355,6 +355,23 @@ def get_summary(days_total: int = 31, forecast_pct: int = 100, mode: str = "avg"
     result.sort(key=lambda x: x.get("forecast_to", 0), reverse=True)
     return result
 
+@app.get("/api/admin/uploads")
+def get_summary_compat(days_total: int = 31, forecast_pct: int = 100, mode: str = "avg", user=Depends(require_auth)):
+    """Compatibility alias for old frontend"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    result = []
+    for sid in STORE_DATA:
+        try:
+            data = get_store_data(sid, days_total, forecast_pct, mode, user)
+            if not data.get("no_data"):
+                data["store_name"] = data.get("name", "")
+                result.append(data)
+        except Exception:
+            continue
+    result.sort(key=lambda x: x.get("forecast_to", 0), reverse=True)
+    return result
+
 # ─── Управление пользователями (только admin) ─────────────────────────────────
 @app.get("/api/users")
 def get_users(user=Depends(require_admin)):
