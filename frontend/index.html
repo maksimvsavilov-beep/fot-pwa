@@ -563,14 +563,17 @@ document.getElementById('a-mode').addEventListener('change', function() {
 });
 
 // ── Admin: сводка ──────────────────────────────────────────────────────────
-async function loadSummary() { // v3
+async function loadSummary(retry = true) { // v4
   const days = document.getElementById('a-days').value;
   const mode = document.getElementById('a-mode').value;
   const pct = document.getElementById('a-pct').value;
   document.getElementById('summary-list').innerHTML = '<div class="loading">Загрузка...</div>';
   try {
     const data = await api(`/api/summary?days_total=${days}&mode=${mode}&forecast_pct=${pct}`);
-    if (!data.length) { document.getElementById('summary-list').innerHTML = '<div class="empty">Данные не загружены</div>'; return; }
+    if (!data.length) {
+      if (retry) { setTimeout(() => loadSummary(false), 2000); return; }
+      document.getElementById('summary-list').innerHTML = '<div class="empty">Данные не загружены</div>'; return;
+    }
 
     const totTO = data.reduce((a, r) => a + (r.forecast_to || 0), 0);
     const totFOT = data.reduce((a, r) => a + (r.forecast_fot || 0), 0);
@@ -649,7 +652,7 @@ async function uploadFile(input) {
       <div class="upload-sub">${data.rows} строк · ${data.date}</div>`;
     toast('Файл загружен: ' + data.rows + ' строк');
     loadUploadLog();
-    loadSummary();
+    adminTab('summary');
   } catch (e) {
     zone.className = 'upload-zone';
     zone.innerHTML = '<div class="upload-icon">📂</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Ежедневный .xlsx из системы мотивации</div>';
