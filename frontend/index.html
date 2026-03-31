@@ -186,6 +186,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .log-date { font-weight: 600; }
 .log-meta { color: var(--gray); font-size: 12px; }
 
+/* ── График ── */
+.sched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -12px; padding: 0 12px 8px; }
+.sched-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+.sched-table th, .sched-table td { border: 1px solid #ddd; padding: 4px 3px; text-align: center; min-width: 26px; }
+.sched-table th { background: #BDD7EE; font-weight: 600; position: sticky; top: 0; z-index: 2; }
+.sched-table .sched-name { text-align: left; min-width: 130px; padding: 4px 8px; position: sticky; left: 0; background: #fff; z-index: 1; }
+.sched-table .sched-role { text-align: left; min-width: 90px; padding: 4px 6px; font-size: 11px; color: #888; position: sticky; left: 130px; background: #fff; z-index: 1; }
+.sched-table .sched-total { font-weight: 700; color: var(--blue); background: #f0f4ff; }
+.sched-cell { cursor: pointer; user-select: none; border-radius: 2px; }
+.sched-cell:active { opacity: .7; }
+.s-r  { background: #C6EFCE; color: #276221; font-weight: 600; }
+.s-v  { background: #D9D9D9; color: #555; }
+.s-o  { background: #FFEB9C; color: #7d5a00; font-weight: 600; }
+.s-b  { background: #FFC7CE; color: #9c0006; font-weight: 600; }
+.s-we { background: #F0F0F0; color: #aaa; }
+.sched-table .th-we { background: #C8C8C8; }
+.sched-saved { font-size: 12px; color: var(--green); text-align: center; padding: 4px; }
+
 /* ── Toast ── */
 .toast { position: fixed; bottom: calc(var(--safe-bottom) + 16px); left: 50%; transform: translateX(-50%);
   background: #222; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px;
@@ -280,6 +298,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
     <div class="admin-nav">
       <button id="atab-summary" class="active" onclick="adminTab('summary')">Сводка</button>
       <button id="atab-upload" onclick="adminTab('upload')">Загрузка</button>
+      <button id="atab-schedule" onclick="adminTab('schedule')">График</button>
       <button id="atab-users" onclick="adminTab('users')">Директора</button>
     </div>
 
@@ -326,9 +345,60 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
         <div id="upload-result"></div>
       </div>
       <div class="card">
-        <div class="card-title">История загрузок</div>
+        <div class="card-title">История загрузок мотивации</div>
         <div id="upload-log"><div class="loading">...</div></div>
       </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-title">📊 Загрузка плана ФОТ на месяц</div>
+        <div class="form-row">
+          <label>Месяц</label>
+          <input type="month" id="fot-month" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:#fff">
+        </div>
+        <div class="upload-zone" id="fot-upload-zone" onclick="document.getElementById('fot-xlsx-input').click()">
+          <div class="upload-icon">📊</div>
+          <div class="upload-text">Нажмите для выбора файла ФОТ</div>
+          <div class="upload-sub">Файл плана ФОТ на месяц (.xlsx)</div>
+        </div>
+        <input type="file" id="fot-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadFotFile(this)">
+        <div id="fot-upload-result"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">История загрузок ФОТ</div>
+        <div id="fot-upload-log"><div class="loading">...</div></div>
+      </div>
+    </div>
+
+    <!-- График работы -->
+    <div id="admin-schedule" style="display:none">
+      <div class="card">
+        <div class="card-title">График работы на месяц</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <div class="param-item" style="flex:1;min-width:120px">
+            <label style="font-size:11px;color:var(--gray);display:block;margin-bottom:3px">Магазин</label>
+            <select id="sched-store" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px"></select>
+          </div>
+          <div class="param-item" style="flex:1;min-width:120px">
+            <label style="font-size:11px;color:var(--gray);display:block;margin-bottom:3px">Месяц</label>
+            <input type="month" id="sched-month" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="loadSchedule()">Загрузить</button>
+          <button class="btn btn-outline" style="flex:1" onclick="saveSchedule()">💾 Сохранить</button>
+          <button class="btn btn-outline" style="flex:0 0 auto;padding:13px 16px" onclick="exportSchedule()" title="Скачать Excel">📥</button>
+        </div>
+      </div>
+      <div id="schedule-legend" class="card" style="display:none">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px">
+          <span style="background:#C6EFCE;padding:2px 8px;border-radius:4px">Р — работает</span>
+          <span style="background:#D9D9D9;padding:2px 8px;border-radius:4px">В — выходной</span>
+          <span style="background:#FFEB9C;padding:2px 8px;border-radius:4px">О — отпуск</span>
+          <span style="background:#FFC7CE;padding:2px 8px;border-radius:4px">Б — больничный</span>
+          <span style="background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #ddd">нажмите ячейку для изменения</span>
+        </div>
+      </div>
+      <div id="schedule-content"><div class="empty">Выберите магазин и месяц</div></div>
     </div>
 
     <!-- Управление директорами -->
@@ -452,6 +522,9 @@ function afterLogin() {
     loadStoresList();
     loadSummary();
     loadUploadLog();
+    loadFotLog();
+    initFotMonth();
+    initSchedMonth();
   } else {
     show('director');
     loadDirectorData();
@@ -674,6 +747,54 @@ async function loadUploadLog() {
   } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
 }
 
+// ── FOT: загрузка плана ─────────────────────────────────────────────────────
+async function uploadFotFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const month = document.getElementById('fot-month').value;
+  if (!month) { toast('Выберите месяц'); return; }
+  const zone = document.getElementById('fot-upload-zone');
+  const res = document.getElementById('fot-upload-result');
+  zone.innerHTML = '<div class="upload-icon">⏳</div><div class="upload-text">Загрузка...</div>';
+  res.innerHTML = '';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await apiUpload('/api/fot_upload?month=' + encodeURIComponent(month), fd);
+    zone.className = 'upload-zone ok';
+    zone.innerHTML = `<div class="upload-icon">✅</div>
+      <div class="upload-text">ФОТ загружен</div>
+      <div class="upload-sub">${data.stores_count} магазинов · ${data.month}</div>`;
+    toast('План ФОТ загружен: ' + data.stores_count + ' магазинов');
+    loadFotLog();
+    setTimeout(() => loadSummary(), 500);
+  } catch (e) {
+    zone.className = 'upload-zone';
+    zone.innerHTML = '<div class="upload-icon">📊</div><div class="upload-text">Нажмите для выбора файла ФОТ</div><div class="upload-sub">Файл плана ФОТ на месяц (.xlsx)</div>';
+    res.innerHTML = `<div style="color:var(--red);font-size:13px;margin-top:6px">${e.message}</div>`;
+  }
+  input.value = '';
+}
+
+async function loadFotLog() {
+  const el = document.getElementById('fot-upload-log');
+  try {
+    const logs = await api('/api/fot_log');
+    if (!logs.length) { el.innerHTML = '<div class="empty">ФОТ ещё не загружался</div>'; return; }
+    el.innerHTML = logs.map(l => `<div class="log-item">
+      <div><div class="log-date">${l.month || '—'}</div><div class="log-meta">${l.filename}</div></div>
+      <div style="text-align:right"><div class="log-date">${l.stores_count} магазинов</div>
+      <div class="log-meta">${(l.uploaded_at || '').split('T')[0]}</div></div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
+}
+
+function initFotMonth() {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('fot-month').value = `${now.getFullYear()}-${m}`;
+}
+
 // ── Admin: пользователи ────────────────────────────────────────────────────
 async function loadStoresList() {
   try {
@@ -728,13 +849,150 @@ async function deleteUser(id, name) {
 
 // ── Admin навигация ────────────────────────────────────────────────────────
 function adminTab(tab) {
-  ['summary', 'upload', 'users'].forEach(t => {
+  ['summary', 'upload', 'schedule', 'users'].forEach(t => {
     document.getElementById('admin-' + t).style.display = t === tab ? 'block' : 'none';
     document.getElementById('atab-' + t).classList.toggle('active', t === tab);
   });
-  if (tab === 'summary') loadSummary();
-  if (tab === 'users') loadUsers();
-  if (tab === 'upload') loadUploadLog();
+  if (tab === 'summary')  loadSummary();
+  if (tab === 'users')    loadUsers();
+  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); }
+  if (tab === 'schedule') { initSchedStores(); }
+}
+
+// ── График работы ───────────────────────────────────────────────────────────
+let scheduleData = null;
+const STATUSES = ['', 'Р', 'В', 'О', 'Б'];
+const STATUS_CLASS = {'Р':'s-r','В':'s-v','О':'s-o','Б':'s-b','':'s-we'};
+const WD_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+function initSchedMonth() {
+  const now = new Date();
+  document.getElementById('sched-month').value =
+    `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+function initSchedStores() {
+  const sel = document.getElementById('sched-store');
+  sel.innerHTML = '<option value="">— выберите —</option>';
+  storesList.forEach(s => {
+    sel.innerHTML += `<option value="${s.id}">${s.id} — ${s.name}</option>`;
+  });
+}
+
+async function loadSchedule() {
+  const storeId = document.getElementById('sched-store').value;
+  const month   = document.getElementById('sched-month').value;
+  if (!storeId || !month) { toast('Выберите магазин и месяц'); return; }
+  const el = document.getElementById('schedule-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    scheduleData = await api(`/api/schedule/${storeId}/${month}`);
+    renderSchedule();
+    document.getElementById('schedule-legend').style.display = 'block';
+  } catch(e) {
+    el.innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function renderSchedule() {
+  if (!scheduleData) return;
+  const {days_in_month, weekdays, employees} = scheduleData;
+  if (!employees.length) {
+    document.getElementById('schedule-content').innerHTML =
+      '<div class="empty">Нет данных о сотрудниках. Сначала загрузите файл мотивации.</div>';
+    return;
+  }
+
+  // Build header
+  let thead = '<tr><th class="sched-name">Сотрудник</th><th class="sched-role">Должность</th>';
+  for (let d = 0; d < days_in_month; d++) {
+    const wd = weekdays[d];
+    const isWe = wd >= 5;
+    thead += `<th class="${isWe?'th-we':''}">${d+1}<br><span style="font-weight:400;font-size:10px">${WD_NAMES[wd]}</span></th>`;
+  }
+  thead += '<th>Итого</th></tr>';
+
+  // Build rows
+  let tbody = '';
+  employees.forEach((emp, ei) => {
+    let total = 0;
+    let cells = '';
+    for (let d = 0; d < days_in_month; d++) {
+      const status = emp.days[d] || '';
+      const wd = weekdays[d];
+      const isWe = wd >= 5;
+      const cls = STATUS_CLASS[status] || (isWe ? 's-we' : '');
+      const display = status || (isWe ? 'В' : '');
+      if (status === 'Р') total++;
+      cells += `<td class="sched-cell ${cls}" data-ei="${ei}" data-day="${d}" onclick="cycleCell(this)">${display}</td>`;
+    }
+    tbody += `<tr>
+      <td class="sched-name">${emp.name}</td>
+      <td class="sched-role">${emp.role}</td>
+      ${cells}
+      <td class="sched-total" id="total-${ei}">${total}</td>
+    </tr>`;
+  });
+
+  document.getElementById('schedule-content').innerHTML = `
+    <div class="sched-wrap">
+      <table class="sched-table">
+        <thead>${thead}</thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>`;
+}
+
+function cycleCell(el) {
+  const ei  = parseInt(el.dataset.ei);
+  const day = parseInt(el.dataset.day);
+  const wd  = scheduleData.weekdays[day];
+  const isWe = wd >= 5;
+  const cur = scheduleData.employees[ei].days[day] || '';
+  const idx = STATUSES.indexOf(cur);
+  const next = STATUSES[(idx + 1) % STATUSES.length];
+  scheduleData.employees[ei].days[day] = next;
+
+  // Update cell
+  el.className = 'sched-cell ' + (STATUS_CLASS[next] || (isWe ? 's-we' : ''));
+  el.textContent = next || (isWe ? 'В' : '');
+
+  // Update total
+  const total = scheduleData.employees[ei].days.filter(s => s === 'Р').length;
+  document.getElementById('total-' + ei).textContent = total;
+}
+
+async function saveSchedule() {
+  if (!scheduleData) { toast('Нет данных для сохранения'); return; }
+  const {store_id, month, employees} = scheduleData;
+  try {
+    const res = await api(`/api/schedule/${store_id}/${month}`, {
+      method: 'POST',
+      body: JSON.stringify({employees})
+    });
+    toast('График сохранён ✓');
+  } catch(e) { toast(e.message); }
+}
+
+function exportSchedule() {
+  if (!scheduleData) { toast('Сначала загрузите график'); return; }
+  const {store_id, month} = scheduleData;
+  const url = `/api/schedule/${store_id}/${month}/export`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `schedule_${store_id}_${month}.xlsx`;
+  // Add auth header via fetch + blob
+  fetch(url, {headers: {'Authorization': 'Bearer ' + token}})
+    .then(r => r.blob())
+    .then(blob => {
+      const burl = URL.createObjectURL(blob);
+      const a2 = document.createElement('a');
+      a2.href = burl;
+      a2.download = `график_${store_id}_${month}.xlsx`;
+      a2.click();
+      URL.revokeObjectURL(burl);
+    })
+    .catch(e => toast('Ошибка экспорта'));
 }
 
 // ── Автологин ──────────────────────────────────────────────────────────────

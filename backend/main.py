@@ -1,13 +1,17 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import psycopg2
 import psycopg2.extras
-import hashlib, secrets, os, io
+import hashlib, secrets, os, io, json
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
+from calendar import monthrange
 import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 app = FastAPI()
 
@@ -37,6 +41,30 @@ STORE_DATA = {
     15203: {"name": "Ивантеевка Твид", "plan": 1542018, "sr": 60000, "ar": 75000,  "dr": 90000,  "dc": 1, "ac": 0, "sc": 2, "nc": 0,   "cl": 0,     "ld": 0},
     15221: {"name": "Кузьминки Молл",  "plan": 1512887, "sr": 60000, "ar": 75000,  "dr": 90000,  "dc": 1, "ac": 1, "sc": 2, "nc": 0,   "cl": 29000, "ld": 9000},
 }
+
+# ─── Вспомогательные функции для данных магазина ─────────────────────────────
+def get_store_ref_from_conn(store_id: int, conn) -> dict:
+    """Возвращает плановые данные из fot_plan (последний месяц) или STORE_DATA"""
+    row = conn.execute(
+        "SELECT * FROM fot_plan WHERE store_id=? ORDER BY month DESC LIMIT 1",
+        (store_id,)
+    ).fetchone()
+    if row:
+        base = STORE_DATA.get(store_id, {})
+        return {
+            "name": base.get("name", f"Магазин {store_id}"),
+            "plan": int(row["plan"] or 0),
+            "sr":   int(row["sr"]   or 0),
+            "ar":   int(row["ar"]   or 0),
+            "dr":   int(row["dr"]   or 0),
+            "dc":   float(row["dc"] or 0),
+            "ac":   float(row["ac"] or 0),
+            "sc":   float(row["sc"] or 0),
+            "nc":   float(row["nc"] or 0),
+            "cl":   int(row["cl"]   or 0),
+            "ld":   int(row["ld"]   or 0),
+        }
+    return STORE_DATA.get(store_id)
 
 # ─── БД (PostgreSQL) ─────────────────────────────────────────────────────────
 class DBConn:
@@ -97,6 +125,45 @@ def init_db():
             report_date TEXT,
             rows_count INTEGER,
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fot_plan (
+            id SERIAL PRIMARY KEY,
+            store_id INTEGER NOT NULL,
+            month TEXT NOT NULL,
+            plan INTEGER DEFAULT 0,
+            sr INTEGER DEFAULT 0,
+            ar INTEGER DEFAULT 0,
+            dr INTEGER DEFAULT 0,
+            dc REAL DEFAULT 0,
+            ac REAL DEFAULT 0,
+            sc REAL DEFAULT 0,
+            nc REAL DEFAULT 0,
+            cl INTEGER DEFAULT 0,
+            ld INTEGER DEFAULT 0,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fot_upload_log (
+            id SERIAL PRIMARY KEY,
+            filename TEXT,
+            month TEXT,
+            stores_count INTEGER,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS work_schedule (
+            id SERIAL PRIMARY KEY,
+            store_id INTEGER NOT NULL,
+            month TEXT NOT NULL,
+            employee_name TEXT NOT NULL,
+            employee_role TEXT DEFAULT '',
+            days TEXT DEFAULT '[]',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(store_id, month, employee_name)
         )
     """)
     conn.commit()
@@ -264,11 +331,11 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
     if user["role"] == "director" and user["store_id"] != store_id:
         raise HTTPException(status_code=403, detail="Нет доступа к этому магазину")
 
-    ref = STORE_DATA.get(store_id)
-    if not ref:
-        raise HTTPException(status_code=404, detail="Магазин не найден")
-
     conn = get_db()
+    ref = get_store_ref_from_conn(store_id, conn)
+    if not ref:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Магазин не найден")
     latest = conn.execute(
         "SELECT MAX(report_date) as d FROM motivation_data WHERE store_id=?", (store_id,)
     ).fetchone()
@@ -437,6 +504,97 @@ def upload_log(user=Depends(require_admin)):
     conn.close()
     return [dict(l) for l in logs]
 
+# ─── Загрузка файла ФОТ (месячный план) ──────────────────────────────────────
+@app.post("/api/fot_upload")
+async def upload_fot(file: UploadFile = File(...), month: str = "", user=Depends(require_admin)):
+    if not month:
+        raise HTTPException(status_code=400, detail="Укажите месяц (YYYY-MM)")
+    content = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(content), header=None)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {e}")
+
+    # Находим столбец со store_id (5-значный числовой ID магазина)
+    known_ids = set(STORE_DATA.keys())
+    sid_col = None
+    for ci in range(min(6, len(df.columns))):
+        for val in df.iloc[:, ci]:
+            try:
+                v = int(float(str(val)))
+                if v in known_ids:
+                    sid_col = ci
+                    break
+            except Exception:
+                pass
+        if sid_col is not None:
+            break
+    if sid_col is None:
+        raise HTTPException(status_code=400, detail="Не найдены ID магазинов. Проверьте формат файла.")
+
+    def safe_int(val):
+        try: return int(float(str(val)))
+        except: return 0
+
+    def safe_float(val):
+        try: return float(str(val))
+        except: return 0.0
+
+    conn = get_db()
+    stores_inserted = 0
+
+    for _, row in df.iterrows():
+        try:
+            sid = int(float(str(row.iloc[sid_col])))
+            if sid not in known_ids:
+                continue
+        except Exception:
+            continue
+
+        # Удаляем старую запись за этот месяц для данного магазина
+        conn.execute("DELETE FROM fot_plan WHERE store_id=? AND month=?", (sid, month))
+
+        conn.execute("""
+            INSERT INTO fot_plan
+            (store_id, month, dc, ac, sc, nc, plan, sr, ar, dr, cl, ld)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            sid, month,
+            safe_float(row.iloc[sid_col + 4]),   # Директор
+            safe_float(row.iloc[sid_col + 5]),   # Администратор
+            safe_float(row.iloc[sid_col + 6]),   # Продавец штат
+            safe_float(row.iloc[sid_col + 7]),   # Продавец наймикс
+            safe_int(row.iloc[sid_col + 8]),     # бюджет ТО
+            safe_int(row.iloc[sid_col + 9]),     # Средняя ЗП Продавца
+            safe_int(row.iloc[sid_col + 10]),    # Зарплата АМ
+            safe_int(row.iloc[sid_col + 11]),    # Зарплата ДМ
+            safe_int(row.iloc[sid_col + 18]),    # Клининг
+            safe_int(row.iloc[sid_col + 20]),    # Разгрузка погрузка
+        ))
+        stores_inserted += 1
+
+    conn.execute(
+        "INSERT INTO fot_upload_log (filename, month, stores_count) VALUES (?,?,?)",
+        (file.filename, month, stores_inserted)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "stores_count": stores_inserted, "month": month}
+
+@app.get("/api/fot_log")
+def fot_log(user=Depends(require_admin)):
+    conn = get_db()
+    logs = conn.execute("SELECT * FROM fot_upload_log ORDER BY id DESC LIMIT 10").fetchall()
+    conn.close()
+    return [dict(l) for l in logs]
+
+@app.get("/api/fot_active_month")
+def fot_active_month(user=Depends(require_admin)):
+    conn = get_db()
+    row = conn.execute("SELECT month FROM fot_plan ORDER BY month DESC LIMIT 1").fetchone()
+    conn.close()
+    return {"month": row["month"] if row else None}
+
 @app.get("/api/stores")
 def get_stores_list(user=Depends(require_admin)):
     return [{"id": k, "name": v["name"]} for k, v in STORE_DATA.items()]
@@ -453,6 +611,207 @@ def debug_store_ids():
         "in_db": [{"store_id": r["store_id"], "date": r["report_date"], "rows": r["cnt"], "in_store_data": r["store_id"] in known} for r in rows],
         "store_data_ids": known
     }
+
+# ─── График работы ────────────────────────────────────────────────────────────
+@app.get("/api/schedule/{store_id}/{month}")
+def get_schedule(store_id: int, month: str, user=Depends(require_auth)):
+    if user["role"] == "director" and user["store_id"] != store_id:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    try:
+        year, mon = map(int, month.split("-"))
+        _, days_in_month = monthrange(year, mon)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Неверный формат месяца (YYYY-MM)")
+
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM work_schedule WHERE store_id=? AND month=? ORDER BY id",
+        (store_id, month)
+    ).fetchall()
+    employees_db = conn.execute("""
+        SELECT DISTINCT name, role
+        FROM motivation_data
+        WHERE store_id=? AND is_total=0 AND is_bezshk=0
+          AND name != '' AND name != 'nan'
+          AND role NOT IN ('', 'НетДолжности', 'nan')
+        ORDER BY
+            CASE
+                WHEN role LIKE '%Директор%' THEN 1
+                WHEN role LIKE '%Администратор%' THEN 2
+                ELSE 3
+            END, name
+    """, (store_id,)).fetchall()
+    conn.close()
+
+    schedule_map = {r["employee_name"]: json.loads(r["days"] or "[]") for r in rows}
+    result = []
+    for emp in employees_db:
+        saved = schedule_map.get(emp["name"])
+        if saved and len(saved) >= days_in_month:
+            days = saved[:days_in_month]
+        else:
+            days = [""] * days_in_month
+        result.append({"name": emp["name"], "role": emp["role"], "days": days})
+
+    # Weekday info for header (0=Mon...6=Sun)
+    import calendar as cal
+    weekdays = [cal.weekday(year, mon, d + 1) for d in range(days_in_month)]
+
+    return {
+        "store_id": store_id,
+        "month": month,
+        "days_in_month": days_in_month,
+        "weekdays": weekdays,
+        "employees": result
+    }
+
+
+@app.post("/api/schedule/{store_id}/{month}")
+def save_schedule(store_id: int, month: str, body: dict, user=Depends(require_auth)):
+    if user["role"] == "director" and user["store_id"] != store_id:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    employees = body.get("employees", [])
+    conn = get_db()
+    saved = 0
+    for emp in employees:
+        name = str(emp.get("name", "")).strip()
+        role = str(emp.get("role", ""))
+        days = json.dumps(emp.get("days", []))
+        if not name:
+            continue
+        conn.execute("""
+            INSERT INTO work_schedule (store_id, month, employee_name, employee_role, days, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (store_id, month, employee_name)
+            DO UPDATE SET employee_role=EXCLUDED.employee_role,
+                          days=EXCLUDED.days,
+                          updated_at=EXCLUDED.updated_at
+        """, (store_id, month, name, role, days, datetime.now().isoformat()))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return {"ok": True, "saved": saved}
+
+
+@app.get("/api/schedule/{store_id}/{month}/export")
+def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
+    if user["role"] == "director" and user["store_id"] != store_id:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+
+    data = get_schedule(store_id, month, user)
+    store_name = STORE_DATA.get(store_id, {}).get("name", str(store_id))
+    year, mon = map(int, month.split("-"))
+    days_in_month = data["days_in_month"]
+    weekdays = data["weekdays"]
+
+    import calendar as cal
+    month_name = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"][mon - 1]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "График"
+
+    # Fills
+    fill_weekend = PatternFill("solid", fgColor="D9D9D9")
+    fill_work    = PatternFill("solid", fgColor="C6EFCE")
+    fill_vac     = PatternFill("solid", fgColor="FFEB9C")
+    fill_sick    = PatternFill("solid", fgColor="FFC7CE")
+    fill_header  = PatternFill("solid", fgColor="1A56C0")
+    fill_subhdr  = PatternFill("solid", fgColor="BDD7EE")
+
+    bold_white = Font(bold=True, color="FFFFFF")
+    bold_dark  = Font(bold=True)
+    thin = Side(style="thin", color="AAAAAA")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+
+    # Title
+    ws.merge_cells(f"A1:{get_column_letter(days_in_month + 4)}1")
+    title_cell = ws["A1"]
+    title_cell.value = f"График работы — {store_name} — {month_name} {year}"
+    title_cell.font = bold_white
+    title_cell.fill = fill_header
+    title_cell.alignment = center
+    ws.row_dimensions[1].height = 22
+
+    # Column headers
+    ws["A2"] = "№"
+    ws["B2"] = "Сотрудник"
+    ws["C2"] = "Должность"
+    for d in range(1, days_in_month + 1):
+        col = get_column_letter(d + 3)
+        ws[f"{col}2"] = d
+    ws[f"{get_column_letter(days_in_month + 4)}2"] = "Итого"
+
+    for col in range(1, days_in_month + 5):
+        cell = ws.cell(row=2, column=col)
+        cell.fill = fill_subhdr
+        cell.font = bold_dark
+        cell.alignment = center
+        cell.border = border
+        # Weekend highlight in header
+        if col > 3 and col < days_in_month + 4:
+            if weekdays[col - 4] >= 5:
+                cell.fill = fill_weekend
+
+    ws.column_dimensions["A"].width = 4
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 18
+    for d in range(1, days_in_month + 1):
+        ws.column_dimensions[get_column_letter(d + 3)].width = 3.5
+    ws.column_dimensions[get_column_letter(days_in_month + 4)].width = 6
+
+    # Data rows
+    STATUS_COLOR = {"Р": fill_work, "О": fill_vac, "Б": fill_sick}
+    for i, emp in enumerate(data["employees"]):
+        row = i + 3
+        ws.cell(row=row, column=1, value=i + 1).border = border
+        ws.cell(row=row, column=2, value=emp["name"]).border = border
+        ws.cell(row=row, column=3, value=emp["role"]).border = border
+        total_r = 0
+        for d in range(days_in_month):
+            col = d + 4
+            status = emp["days"][d] if d < len(emp["days"]) else ""
+            cell = ws.cell(row=row, column=col, value=status)
+            cell.alignment = center
+            cell.border = border
+            if status == "Р":
+                total_r += 1
+                cell.fill = fill_work
+            elif status == "В" or (not status and weekdays[d] >= 5):
+                cell.fill = fill_weekend
+            elif status in STATUS_COLOR:
+                cell.fill = STATUS_COLOR[status]
+        tot_cell = ws.cell(row=row, column=days_in_month + 4, value=total_r)
+        tot_cell.font = bold_dark
+        tot_cell.alignment = center
+        tot_cell.border = border
+        ws.row_dimensions[row].height = 18
+
+    # Legend
+    leg_row = len(data["employees"]) + 4
+    ws.cell(row=leg_row, column=1, value="Обозначения:").font = bold_dark
+    for col, (code, label, fill) in enumerate([
+        ("Р","Рабочий день", fill_work),
+        ("В","Выходной", fill_weekend),
+        ("О","Отпуск", fill_vac),
+        ("Б","Больничный", fill_sick),
+    ], start=2):
+        c = ws.cell(row=leg_row, column=col, value=f"{code} — {label}")
+        c.fill = fill
+        c.border = border
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"schedule_{store_id}_{month}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 # ─── Отдаём PWA ──────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
