@@ -81,6 +81,9 @@ class DBConn:
     def commit(self):
         self._conn.commit()
 
+    def rollback(self):
+        self._conn.rollback()
+
     def close(self):
         self._conn.close()
 
@@ -181,7 +184,7 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN first_login INTEGER DEFAULT 1")
         conn.commit()
     except Exception:
-        pass  # Уже существует
+        conn.rollback()  # Сбрасываем упавшую транзакцию (колонка уже существует)
 
     # Создаём аккаунт администратора если нет
     if not conn.execute("SELECT id FROM users WHERE role='admin'").fetchone():
