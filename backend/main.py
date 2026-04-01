@@ -7,7 +7,7 @@ import psycopg2.extras
 import hashlib, secrets, os, io, json
 from datetime import datetime, timedelta
 from typing import Optional, List
-from calendar import monthrange
+from calendar import monthrange, weekday as cal_weekday
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -623,25 +623,32 @@ def get_schedule(store_id: int, month: str, user=Depends(require_auth)):
     except Exception:
         raise HTTPException(status_code=400, detail="Неверный формат месяца (YYYY-MM)")
 
-    conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM work_schedule WHERE store_id=? AND month=? ORDER BY id",
-        (store_id, month)
-    ).fetchall()
-    employees_db = conn.execute("""
-        SELECT DISTINCT name, role
-        FROM motivation_data
-        WHERE store_id=? AND is_total=0 AND is_bezshk=0
-          AND name != '' AND name != 'nan'
-          AND role NOT IN ('', 'НетДолжности', 'nan')
-        ORDER BY
-            CASE
-                WHEN role LIKE '%Директор%' THEN 1
-                WHEN role LIKE '%Администратор%' THEN 2
-                ELSE 3
-            END, name
-    """, (store_id,)).fetchall()
-    conn.close()
+    try:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT * FROM work_schedule WHERE store_id=? AND month=? ORDER BY id",
+            (store_id, month)
+        ).fetchall()
+        # PostgreSQL: DISTINCT + ORDER BY CASE требует подзапрос
+        employees_db = conn.execute("""
+            SELECT name, role FROM (
+                SELECT DISTINCT name, role
+                FROM motivation_data
+                WHERE store_id=?
+                  AND is_total=0 AND is_bezshk=0
+                  AND name IS NOT NULL AND name NOT IN ('', 'nan')
+                  AND role IS NOT NULL AND role NOT IN ('', 'НетДолжности', 'nan')
+            ) sub
+            ORDER BY
+                CASE
+                    WHEN role LIKE '%Директор%' THEN 1
+                    WHEN role LIKE '%Администратор%' THEN 2
+                    ELSE 3
+                END, name
+        """, (store_id,)).fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {str(e)}")
 
     schedule_map = {r["employee_name"]: json.loads(r["days"] or "[]") for r in rows}
     result = []
@@ -653,9 +660,7 @@ def get_schedule(store_id: int, month: str, user=Depends(require_auth)):
             days = [""] * days_in_month
         result.append({"name": emp["name"], "role": emp["role"], "days": days})
 
-    # Weekday info for header (0=Mon...6=Sun)
-    import calendar as cal
-    weekdays = [cal.weekday(year, mon, d + 1) for d in range(days_in_month)]
+    weekdays = [cal_weekday(year, mon, d + 1) for d in range(days_in_month)]
 
     return {
         "store_id": store_id,
@@ -704,7 +709,6 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
     days_in_month = data["days_in_month"]
     weekdays = data["weekdays"]
 
-    import calendar as cal
     month_name = ["Январь","Февраль","Март","Апрель","Май","Июнь",
                   "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"][mon - 1]
 
