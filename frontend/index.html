@@ -7,16 +7,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="ФОТ КК">
-<meta name="theme-color" content="#1a56c0">
+<meta name="theme-color" content="#C0135A">
 <title>ФОТ — Москва 2 КК</title>
 <link rel="manifest" href="/static/manifest.json">
 <style>
 :root {
-  --blue: #1a56c0; --blue-light: #e8f0fe; --blue-dark: #1240a0;
+  --blue: #C0135A; --blue-light: #fce4ec; --blue-dark: #9c0040;
   --green: #1a9e6e; --green-light: #e6f9f1;
   --amber: #c07c00; --amber-light: #fff8e6;
   --red: #c0392b; --red-light: #fdecea;
-  --gray: #888; --gray-light: #f5f5f5; --border: #e0e0e0;
+  --gray: #888; --gray-light: #f9f0f4; --border: #e8d0da;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -25,11 +25,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
   background: var(--gray-light); color: #1a1a1a; font-size: 15px; min-height: 100vh; }
 
 /* ── Шапка ── */
-.header { background: var(--blue); color: #fff; padding: calc(var(--safe-top) + 12px) 16px 12px;
-  display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-.header-title { font-size: 16px; font-weight: 600; }
-.header-sub { font-size: 11px; opacity: .75; margin-top: 2px; }
-.header-btn { background: rgba(255,255,255,.15); border: none; color: #fff;
+.header { background: linear-gradient(135deg, #C0135A 0%, #E0105A 60%, #e8406e 100%);
+  color: #fff; padding: calc(var(--safe-top) + 12px) 16px 12px;
+  display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(192,19,90,.35); }
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: .01em; }
+.header-sub { font-size: 11px; opacity: .80; margin-top: 2px; }
+.header-btn { background: rgba(255,255,255,.18); border: none; color: #fff;
   padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 
 /* ── Экраны ── */
@@ -38,23 +40,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 
 /* ── Логин ── */
 .login-wrap { min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; padding: 24px; }
-.login-logo { font-size: 48px; margin-bottom: 12px; }
-.login-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; color: var(--blue); }
-.login-sub { font-size: 14px; color: var(--gray); margin-bottom: 32px; text-align: center; }
+  align-items: center; justify-content: center; padding: 24px;
+  background: linear-gradient(160deg, #fff 0%, #fce4ec 100%); }
+.login-logo { margin-bottom: 8px; }
+.login-logo svg { width: 90px; height: 90px; filter: drop-shadow(0 4px 12px rgba(192,19,90,.30)); }
+.login-brand { font-size: 26px; font-weight: 800; color: #C0135A;
+  letter-spacing: -.5px; margin-bottom: 2px; }
+.login-brand span { color: #e8406e; }
+.login-city { font-size: 13px; font-weight: 700; color: #C0135A; letter-spacing: .08em;
+  text-transform: uppercase; margin-bottom: 4px; opacity: .75; }
+.login-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #C0135A; }
+.login-sub { font-size: 13px; color: var(--gray); margin-bottom: 28px; text-align: center; }
 .pin-display { display: flex; gap: 10px; margin-bottom: 24px; justify-content: center; }
 .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--blue);
   transition: background .15s; }
 .pin-dot.filled { background: var(--blue); }
 .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   max-width: 280px; width: 100%; }
-.pin-key { height: 64px; border-radius: 12px; border: 1.5px solid var(--border);
+.pin-key { height: 64px; border-radius: 14px; border: 1.5px solid #f0d0dc;
   background: #fff; font-size: 22px; font-weight: 500; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: background .1s;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-.pin-key:active { background: var(--blue-light); }
+  display: flex; align-items: center; justify-content: center; transition: all .1s;
+  box-shadow: 0 2px 6px rgba(192,19,90,.08); }
+.pin-key:active { background: var(--blue-light); transform: scale(.97); }
 .pin-key.del { font-size: 18px; color: var(--gray); }
-.pin-key.submit { background: var(--blue); color: #fff; border-color: var(--blue); }
+.pin-key.submit { background: linear-gradient(135deg, #C0135A, #e8406e); color: #fff;
+  border-color: transparent; box-shadow: 0 3px 10px rgba(192,19,90,.40); }
 .pin-key.submit:active { background: var(--blue-dark); }
 .pin-error { color: var(--red); font-size: 13px; text-align: center; margin-top: 8px; min-height: 20px; }
 
@@ -190,10 +200,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .sched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -12px; padding: 0 12px 8px; }
 .sched-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
 .sched-table th, .sched-table td { border: 1px solid #ddd; padding: 4px 3px; text-align: center; min-width: 26px; }
-.sched-table th { background: #BDD7EE; font-weight: 600; position: sticky; top: 0; z-index: 2; }
+.sched-table th { background: #f8cdd9; font-weight: 600; position: sticky; top: 0; z-index: 2; }
 .sched-table .sched-name { text-align: left; min-width: 130px; padding: 4px 8px; position: sticky; left: 0; background: #fff; z-index: 1; }
 .sched-table .sched-role { text-align: left; min-width: 90px; padding: 4px 6px; font-size: 11px; color: #888; position: sticky; left: 130px; background: #fff; z-index: 1; }
-.sched-table .sched-total { font-weight: 700; color: var(--blue); background: #f0f4ff; }
+.sched-table .sched-total { font-weight: 700; color: var(--blue); background: #fce4ec; }
 .sched-cell { cursor: pointer; user-select: none; border-radius: 2px; }
 .sched-cell:active { opacity: .7; }
 .s-r  { background: #C6EFCE; color: #276221; font-weight: 600; }
@@ -219,9 +229,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 <!-- ══ Экран логина ══════════════════════════════════════════════════════════ -->
 <div id="screen-login" class="screen active">
   <div class="login-wrap">
-    <div class="login-logo">🏪</div>
-    <div class="login-title">ФОТ Калькулятор</div>
-    <div class="login-sub">Москва 2 КК — введите пин-код</div>
+    <div class="login-logo">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="lg1" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#f06090"/>
+            <stop offset="50%" stop-color="#C0135A"/>
+            <stop offset="100%" stop-color="#8c003e"/>
+          </radialGradient>
+          <radialGradient id="lg2" cx="40%" cy="30%" r="60%">
+            <stop offset="0%" stop-color="#ffd0df"/>
+            <stop offset="100%" stop-color="#C0135A"/>
+          </radialGradient>
+        </defs>
+        <!-- Pin/drop shape -->
+        <path d="M50 8 C28 8 14 24 14 42 C14 62 50 92 50 92 C50 92 86 62 86 42 C86 24 72 8 50 8Z"
+              fill="url(#lg1)"/>
+        <!-- Inner circle cutout -->
+        <circle cx="50" cy="40" r="16" fill="white" opacity="0.92"/>
+        <!-- Highlight glare -->
+        <ellipse cx="40" cy="26" rx="10" ry="6" fill="white" opacity="0.25" transform="rotate(-20,40,26)"/>
+      </svg>
+    </div>
+    <div class="login-brand">kari<span>kids</span></div>
+    <div class="login-city">Москва 2 КК</div>
+    <div class="login-sub">ФОТ Калькулятор — введите пин-код</div>
     <div class="pin-display" id="pin-display">
       <div class="pin-dot" id="d0"></div>
       <div class="pin-dot" id="d1"></div>
@@ -251,9 +283,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 <!-- ══ Шапка (видна везде кроме логина) ═════════════════════════════════════ -->
 <div id="app-header" style="display:none">
   <div class="header">
-    <div>
-      <div class="header-title" id="header-title">ФОТ КК</div>
-      <div class="header-sub" id="header-sub"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 6 C27 6 12 23 12 42 C12 63 50 94 50 94 C50 94 88 63 88 42 C88 23 73 6 50 6Z" fill="rgba(255,255,255,0.25)"/>
+        <circle cx="50" cy="40" r="17" fill="rgba(255,255,255,0.55)"/>
+      </svg>
+      <div>
+        <div class="header-title" id="header-title">kari kids — ФОТ</div>
+        <div class="header-sub" id="header-sub">Москва 2 КК</div>
+      </div>
     </div>
     <button class="header-btn" onclick="logout()">Выйти</button>
   </div>
