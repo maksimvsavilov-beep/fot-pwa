@@ -382,7 +382,48 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
         <div class="header-sub" id="header-sub">Москва 2 КК</div>
       </div>
     </div>
-    <button class="header-btn" onclick="logout()">Выйти</button>
+    <div style="display:flex;gap:8px">
+      <button class="header-btn" onclick="showHelp()" style="background:rgba(255,255,255,0.15);font-size:16px;padding:6px 12px">?</button>
+      <button class="header-btn" onclick="logout()">Выйти</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Модальное окно — Инструкция ══════════════════════════════════════════ -->
+<div id="help-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.5);overflow-y:auto">
+  <div style="background:#fff;max-width:480px;margin:20px auto;border-radius:16px;padding:24px 20px;position:relative">
+    <button onclick="closeHelp()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#888">✕</button>
+    <div style="font-size:20px;font-weight:800;color:#C0135A;margin-bottom:16px">📖 Инструкция</div>
+
+    <div style="font-size:13px;font-weight:700;color:#C0135A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🔐 Вход</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">• Введите <b>номер магазина</b> и PIN-код</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">• Начальный PIN: <b>1111</b></div>
+    <div style="font-size:13px;color:#444;margin-bottom:16px">• При первом входе система попросит установить <b>свой PIN</b></div>
+
+    <div style="font-size:13px;font-weight:700;color:#C0135A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📊 Сводка</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">Показывает выполнение плана ТО, прогноз, факт ФОТ и начисления по каждому сотруднику.</div>
+    <div style="background:#fce4ec;border-radius:8px;padding:10px 12px;margin:8px 0 16px">
+      <div style="font-size:12px;font-weight:700;color:#C0135A;margin-bottom:4px">Формула расчёта ЗП:</div>
+      <div style="font-size:13px;color:#333"><b>ЗП = Ставка × Коэф.плана × Коэф.часов</b></div>
+      <div style="font-size:12px;color:#666;margin-top:6px">
+        • <b>Коэф.плана</b> = % выполнения ÷ 100 (максимум 1.10)<br>
+        • <b>Коэф.часов</b> = часы из графика ÷ 168<br>
+        • Если график не заполнен — коэф.часов = 1.0
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;color:#C0135A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📅 График работы</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">1. Выберите месяц → нажмите <b>Загрузить</b></div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">2. Нажмите на ячейку → введите часы (напр. <b>8</b> или <b>12</b>)</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px">3. Или выберите: <b>В</b> — выходной, <b>О</b> — отпуск, <b>Б</b> — больничный</div>
+    <div style="font-size:13px;color:#444;margin-bottom:16px">4. Нажмите <b>💾 Сохранить</b></div>
+
+    <div style="font-size:13px;font-weight:700;color:#C0135A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📲 Установка на телефон</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px"><b>Android (Chrome):</b> ⋮ → «Добавить на главный экран»</div>
+    <div style="font-size:13px;color:#444;margin-bottom:4px"><b>iPhone (Safari):</b> кнопка 􀈂 → «На экран "Домой"»</div>
+    <div style="font-size:12px;color:#e65100;margin-top:4px">⚠️ На iPhone только через Safari</div>
+
+    <button onclick="closeHelp()" class="btn btn-primary" style="width:100%;margin-top:20px">Понятно</button>
   </div>
 </div>
 
@@ -594,6 +635,9 @@ let storesList = [];
 // ── Утилиты ────────────────────────────────────────────────────────────────
 const f = n => Math.round(n).toLocaleString('ru-RU') + ' ₽';
 const fp = n => n.toFixed(1) + '%';
+
+function showHelp() { document.getElementById('help-modal').style.display = 'block'; document.body.style.overflow = 'hidden'; }
+function closeHelp() { document.getElementById('help-modal').style.display = 'none'; document.body.style.overflow = ''; }
 
 function toast(msg, dur = 2500) {
   const el = document.getElementById('toast');
