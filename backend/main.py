@@ -102,6 +102,15 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            token_expires TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS motivation_data (
             id SERIAL PRIMARY KEY,
             store_id INTEGER NOT NULL,
@@ -190,13 +199,24 @@ def plan_coef(pct: float) -> float:
 def get_user_by_token(token: str):
     if not token:
         return None
-    conn = get_db()
-    user = conn.execute(
-        "SELECT * FROM users WHERE token=? AND token_expires > ?",
-        (token, datetime.now().isoformat())
-    ).fetchone()
-    conn.close()
-    return user
+    try:
+        conn = get_db()
+        # Ищем в таблице сессий (новый механизм)
+        row = conn.execute("""
+            SELECT u.* FROM users u
+            JOIN user_sessions s ON s.user_id = u.id
+            WHERE s.token=? AND s.token_expires > ?
+        """, (token, datetime.now().isoformat())).fetchone()
+        if not row:
+            # Fallback: старый механизм (один токен в users)
+            row = conn.execute(
+                "SELECT * FROM users WHERE token=? AND token_expires > ?",
+                (token, datetime.now().isoformat())
+            ).fetchone()
+        conn.close()
+        return row
+    except Exception:
+        return None
 
 def require_auth(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -225,7 +245,13 @@ def login(body: dict):
         conn.close()
         raise HTTPException(status_code=401, detail="Неверный пин-код")
     token = secrets.token_hex(32)
-    expires = (datetime.now() + timedelta(days=30)).isoformat()
+    expires = (datetime.now() + timedelta(days=90)).isoformat()
+    # Сохраняем сессию в user_sessions (множество активных сессий)
+    conn.execute(
+        "INSERT INTO user_sessions (user_id, token, token_expires) VALUES (?,?,?)",
+        (user["id"], token, expires)
+    )
+    # Обратная совместимость: обновляем и в users
     conn.execute("UPDATE users SET token=?, token_expires=? WHERE id=?",
                  (token, expires, user["id"]))
     conn.commit()

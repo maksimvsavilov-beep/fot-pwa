@@ -496,8 +496,14 @@ function toast(msg, dur = 2500) {
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(API + path, { ...opts, headers });
+  const res = await fetch(API + path, { ...opts, headers, cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    token = null;
+    localStorage.removeItem('token');
+    show('login');
+    throw new Error('Сессия истекла — войдите снова');
+  }
   if (!res.ok) throw new Error(data.detail || 'Ошибка сервера');
   return data;
 }
