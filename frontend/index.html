@@ -811,10 +811,14 @@ function renderStoreDetail(d) {
     if (!emps.length) return;
     staffHtml += `<div class="staff-group">${grp}</div>`;
     emps.forEach(e => {
+      const hCoef = e.hours_coef ?? 1;
+      const hLabel = e.hours > 0
+        ? `${e.hours}ч × ${hCoef.toFixed(2)}`
+        : `<span style="color:#bbb">нет графика</span>`;
       staffHtml += `<div class="staff-row">
         <div class="staff-info" style="flex:1">
           <div class="staff-name">${e.name}</div>
-          <div class="staff-rate">${f(e.rate)} × ${d.coef.toFixed(2)}</div>
+          <div class="staff-rate">${f(e.rate)} × ${d.coef.toFixed(2)} × ${hLabel}</div>
         </div>
         <div class="staff-sal">${f(e.forecast_salary)}</div>
       </div>`;

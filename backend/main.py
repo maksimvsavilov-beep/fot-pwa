@@ -437,7 +437,30 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         "SELECT * FROM motivation_data WHERE store_id=? AND report_date=?",
         (store_id, report_date)
     ).fetchall()
+
+    # Загружаем часы из графика работы за текущий месяц
+    STANDARD_HOURS = 168
+    parts = report_date.split(".")
+    month_str = f"{parts[2]}-{parts[1]}"  # YYYY-MM
+    sched_rows = conn.execute(
+        "SELECT employee_name, days FROM work_schedule WHERE store_id=? AND month=?",
+        (store_id, month_str)
+    ).fetchall()
     conn.close()
+
+    hours_map = {}
+    for srow in sched_rows:
+        try:
+            days_list = json.loads(srow["days"] or "[]")
+            total_h = sum(int(d) for d in days_list if str(d).isdigit() and int(d) > 0)
+            if total_h > 0:
+                hours_map[srow["employee_name"]] = total_h
+        except Exception:
+            pass
+
+    def get_hours_coef(name):
+        h = hours_map.get(name, 0)
+        return round(h / STANDARD_HOURS, 4) if h > 0 else 1.0
 
     total_row = next((r for r in rows if r["is_total"]), None)
     staff = [r for r in rows if not r["is_total"] and not r["is_bezshk"] and r["role"] and r["role"] != "НетДолжности"]
@@ -451,13 +474,7 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
     fact_plan_pct = (fact_to / ref["plan"] * 100) if ref["plan"] > 0 else 0
     coef = plan_coef(plan_pct)
 
-    fot_dm = ref["dr"] * ref["dc"] * coef
-    fot_am = ref["ar"] * ref["ac"] * coef
-    fot_s = ref["sr"] * (ref["sc"] + ref["nc"]) * coef
-    fot_wages = fot_dm + fot_am + fot_s
     extra = ref["cl"] + ref["ld"]
-    forecast_fot = fot_wages + extra
-    rest_fot = max(0, forecast_fot - fact_fot - extra * (day_report / days_total))
 
     def get_rate(role):
         if "Директор" in role: return ref["dr"]
@@ -469,10 +486,17 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         "role": r["role"],
         "rate": get_rate(r["role"]),
         "fact_income": r["income"],
-        "forecast_salary": get_rate(r["role"]) * coef,
+        "hours": hours_map.get(r["name"], 0),
+        "hours_coef": get_hours_coef(r["name"]),
+        "forecast_salary": round(get_rate(r["role"]) * coef * get_hours_coef(r["name"])),
     } for r in staff], key=lambda x: (
         0 if "Директор" in x["role"] else 1 if "Администратор" in x["role"] else 2
     ))
+
+    # Итоговый ФОТ = сумма начислений сотрудников + клининг/охрана
+    fot_wages = sum(s["forecast_salary"] for s in staff_list)
+    forecast_fot = fot_wages + extra
+    rest_fot = max(0, forecast_fot - fact_fot - extra * (day_report / days_total))
 
     return {
         "store_id": store_id,
