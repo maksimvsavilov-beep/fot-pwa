@@ -214,6 +214,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .sched-table .th-we { background: #C8C8C8; }
 .sched-saved { font-size: 12px; color: var(--green); text-align: center; padding: 4px; }
 
+/* ── Попап редактирования ячейки ── */
+.cell-popup { position: absolute; z-index: 500; background: #fff; border: 1.5px solid var(--blue);
+  border-radius: 10px; padding: 10px 12px; box-shadow: 0 4px 20px rgba(192,19,90,.20);
+  min-width: 140px; }
+.cp-btn { flex: 1; padding: 5px 0; border: none; border-radius: 6px; font-size: 13px;
+  font-weight: 700; cursor: pointer; }
+
 /* ── Toast ── */
 .toast { position: fixed; bottom: calc(var(--safe-bottom) + 16px); left: 50%; transform: translateX(-50%);
   background: #222; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px;
@@ -899,9 +906,16 @@ function adminTab(tab) {
 
 // ── График работы ───────────────────────────────────────────────────────────
 let scheduleData = null;
-const STATUSES = ['', 'Р', 'В', 'О', 'Б'];
-const STATUS_CLASS = {'Р':'s-r','В':'s-v','О':'s-o','Б':'s-b','':'s-we'};
+const STATUS_CLASS = {'В':'s-v','О':'s-o','Б':'s-b'};
 const WD_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+function cellClass(val, isWe) {
+  if (/^\d+$/.test(val)) return 's-r';
+  return STATUS_CLASS[val] || (isWe ? 's-we' : '');
+}
+function cellDisplay(val, isWe) {
+  return val || (isWe ? '' : '');
+}
 
 function initSchedMonth() {
   const now = new Date();
@@ -948,27 +962,26 @@ function renderSchedule() {
     const isWe = wd >= 5;
     thead += `<th class="${isWe?'th-we':''}">${d+1}<br><span style="font-weight:400;font-size:10px">${WD_NAMES[wd]}</span></th>`;
   }
-  thead += '<th>Итого</th></tr>';
+  thead += '<th>Итого (ч)</th></tr>';
 
   // Build rows
   let tbody = '';
   employees.forEach((emp, ei) => {
-    let total = 0;
+    let total = emp.days.reduce((s, v) => s + (parseInt(v) || 0), 0);
     let cells = '';
     for (let d = 0; d < days_in_month; d++) {
-      const status = emp.days[d] || '';
+      const val = emp.days[d] || '';
       const wd = weekdays[d];
       const isWe = wd >= 5;
-      const cls = STATUS_CLASS[status] || (isWe ? 's-we' : '');
-      const display = status || (isWe ? 'В' : '');
-      if (status === 'Р') total++;
-      cells += `<td class="sched-cell ${cls}" data-ei="${ei}" data-day="${d}" onclick="cycleCell(this)">${display}</td>`;
+      const cls = cellClass(val, isWe);
+      const display = cellDisplay(val, isWe);
+      cells += `<td class="sched-cell ${cls}" data-ei="${ei}" data-day="${d}" onclick="editCell(this)">${display}</td>`;
     }
     tbody += `<tr>
       <td class="sched-name">${emp.name}</td>
       <td class="sched-role">${emp.role}</td>
       ${cells}
-      <td class="sched-total" id="total-${ei}">${total}</td>
+      <td class="sched-total" id="total-${ei}">${total || 0}</td>
     </tr>`;
   });
 
@@ -981,23 +994,74 @@ function renderSchedule() {
     </div>`;
 }
 
-function cycleCell(el) {
+function editCell(el) {
   const ei  = parseInt(el.dataset.ei);
   const day = parseInt(el.dataset.day);
-  const wd  = scheduleData.weekdays[day];
-  const isWe = wd >= 5;
   const cur = scheduleData.employees[ei].days[day] || '';
-  const idx = STATUSES.indexOf(cur);
-  const next = STATUSES[(idx + 1) % STATUSES.length];
-  scheduleData.employees[ei].days[day] = next;
+  closePopup();
 
-  // Update cell
-  el.className = 'sched-cell ' + (STATUS_CLASS[next] || (isWe ? 's-we' : ''));
-  el.textContent = next || (isWe ? 'В' : '');
+  const popup = document.createElement('div');
+  popup.id = 'cell-popup';
+  popup.className = 'cell-popup';
+  popup.innerHTML = `
+    <div style="font-size:11px;color:#888;margin-bottom:6px">Рабочие часы</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="number" id="cp-hours" min="1" max="24" placeholder="ч"
+        value="${/^\d+$/.test(cur) ? cur : ''}"
+        style="width:60px;font-size:18px;padding:4px 6px;border:1.5px solid var(--blue);border-radius:6px;text-align:center"
+        onkeydown="if(event.key==='Enter')setCellVal(${ei},${day},'hours')">
+      <button onclick="setCellVal(${ei},${day},'hours')" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:14px;cursor:pointer">✓</button>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:8px">
+      <button class="cp-btn s-v" onclick="setCellVal(${ei},${day},'В')">В</button>
+      <button class="cp-btn s-o" onclick="setCellVal(${ei},${day},'О')">О</button>
+      <button class="cp-btn s-b" onclick="setCellVal(${ei},${day},'Б')">Б</button>
+      <button class="cp-btn" onclick="setCellVal(${ei},${day},'')" style="background:#f0f0f0;color:#666">✕</button>
+    </div>`;
 
-  // Update total
-  const total = scheduleData.employees[ei].days.filter(s => s === 'Р').length;
-  document.getElementById('total-' + ei).textContent = total;
+  const rect = el.getBoundingClientRect();
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 4;
+  if (left + 150 > window.innerWidth) left = window.innerWidth - 155;
+  popup.style.left = left + 'px';
+  popup.style.top  = top + 'px';
+  document.body.appendChild(popup);
+  const inp = document.getElementById('cp-hours');
+  inp.focus(); inp.select();
+
+  setTimeout(() => document.addEventListener('click', _popupOutside), 50);
+}
+
+function _popupOutside(e) {
+  const p = document.getElementById('cell-popup');
+  if (p && !p.contains(e.target)) closePopup();
+}
+
+function closePopup() {
+  const p = document.getElementById('cell-popup');
+  if (p) p.remove();
+  document.removeEventListener('click', _popupOutside);
+}
+
+function setCellVal(ei, day, val) {
+  let value = val;
+  if (val === 'hours') {
+    const h = parseInt(document.getElementById('cp-hours')?.value);
+    value = (!isNaN(h) && h >= 1 && h <= 24) ? String(h) : '';
+  }
+  scheduleData.employees[ei].days[day] = value;
+
+  const wd = scheduleData.weekdays[day];
+  const isWe = wd >= 5;
+  const cell = document.querySelector(`td[data-ei="${ei}"][data-day="${day}"]`);
+  if (cell) {
+    cell.className = 'sched-cell ' + cellClass(value, isWe);
+    cell.textContent = cellDisplay(value, isWe);
+  }
+
+  const total = scheduleData.employees[ei].days.reduce((s, v) => s + (parseInt(v) || 0), 0);
+  document.getElementById('total-' + ei).textContent = total || 0;
+  closePopup();
 }
 
 async function saveSchedule() {

@@ -740,7 +740,7 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
     for d in range(1, days_in_month + 1):
         col = get_column_letter(d + 3)
         ws[f"{col}2"] = d
-    ws[f"{get_column_letter(days_in_month + 4)}2"] = "Итого"
+    ws[f"{get_column_letter(days_in_month + 4)}2"] = "Итого (ч)"
 
     for col in range(1, days_in_month + 5):
         cell = ws.cell(row=2, column=col)
@@ -761,27 +761,31 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
     ws.column_dimensions[get_column_letter(days_in_month + 4)].width = 6
 
     # Data rows
-    STATUS_COLOR = {"Р": fill_work, "О": fill_vac, "Б": fill_sick}
+    STATUS_COLOR = {"О": fill_vac, "Б": fill_sick}
     for i, emp in enumerate(data["employees"]):
         row = i + 3
         ws.cell(row=row, column=1, value=i + 1).border = border
         ws.cell(row=row, column=2, value=emp["name"]).border = border
         ws.cell(row=row, column=3, value=emp["role"]).border = border
-        total_r = 0
+        total_hours = 0
         for d in range(days_in_month):
             col = d + 4
             status = emp["days"][d] if d < len(emp["days"]) else ""
-            cell = ws.cell(row=row, column=col, value=status)
+            # Числовые часы
+            try:
+                hours = int(status)
+                cell = ws.cell(row=row, column=col, value=hours)
+                cell.fill = fill_work
+                total_hours += hours
+            except (ValueError, TypeError):
+                cell = ws.cell(row=row, column=col, value=status)
+                if status == "В" or (not status and weekdays[d] >= 5):
+                    cell.fill = fill_weekend
+                elif status in STATUS_COLOR:
+                    cell.fill = STATUS_COLOR[status]
             cell.alignment = center
             cell.border = border
-            if status == "Р":
-                total_r += 1
-                cell.fill = fill_work
-            elif status == "В" or (not status and weekdays[d] >= 5):
-                cell.fill = fill_weekend
-            elif status in STATUS_COLOR:
-                cell.fill = STATUS_COLOR[status]
-        tot_cell = ws.cell(row=row, column=days_in_month + 4, value=total_r)
+        tot_cell = ws.cell(row=row, column=days_in_month + 4, value=total_hours)
         tot_cell.font = bold_dark
         tot_cell.alignment = center
         tot_cell.border = border
