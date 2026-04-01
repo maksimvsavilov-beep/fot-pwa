@@ -176,14 +176,31 @@ def init_db():
         )
     """)
     conn.commit()
-    cur = conn.execute("SELECT id FROM users WHERE role='admin'")
-    if not cur.fetchone():
+    # Добавляем колонку first_login если нет (миграция)
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN first_login INTEGER DEFAULT 1")
+        conn.commit()
+    except Exception:
+        pass  # Уже существует
+
+    # Создаём аккаунт администратора если нет
+    if not conn.execute("SELECT id FROM users WHERE role='admin'").fetchone():
         pin_hash = hashlib.sha256(ADMIN_PIN.encode()).hexdigest()
         conn.execute(
-            "INSERT INTO users (name, pin_hash, store_id, role) VALUES (?, ?, NULL, 'admin')",
+            "INSERT INTO users (name, pin_hash, store_id, role, first_login) VALUES (?,?,NULL,'admin',0)",
             ("Администратор", pin_hash)
         )
         conn.commit()
+
+    # Авто-создаём аккаунты директоров для всех магазинов
+    default_pin_hash = hashlib.sha256("1111".encode()).hexdigest()
+    for sid, sdata in STORE_DATA.items():
+        if not conn.execute("SELECT id FROM users WHERE store_id=? AND role='director'", (sid,)).fetchone():
+            conn.execute(
+                "INSERT INTO users (name, pin_hash, store_id, role, first_login) VALUES (?,?,?,'director',1)",
+                (f"Магазин {sid}", default_pin_hash, sid)
+            )
+    conn.commit()
     conn.close()
 
 init_db()
@@ -236,33 +253,80 @@ def require_admin(user=Depends(require_auth)):
 @app.post("/api/login")
 def login(body: dict):
     pin = body.get("pin", "").strip()
+    store_id_raw = body.get("store_id")
     if not pin:
         raise HTTPException(status_code=400, detail="Введите пин-код")
     pin_hash = hash_pin(pin)
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE pin_hash=?", (pin_hash,)).fetchone()
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=401, detail="Неверный пин-код")
+    if store_id_raw:
+        # Вход директора: по store_id + PIN
+        try:
+            sid = int(store_id_raw)
+        except (ValueError, TypeError):
+            conn.close()
+            raise HTTPException(status_code=400, detail="Неверный номер магазина")
+        user = conn.execute(
+            "SELECT * FROM users WHERE store_id=? AND role='director' AND pin_hash=?",
+            (sid, pin_hash)
+        ).fetchone()
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Неверный номер магазина или пин-код")
+    else:
+        # Вход администратора: только PIN
+        user = conn.execute(
+            "SELECT * FROM users WHERE role='admin' AND pin_hash=?",
+            (pin_hash,)
+        ).fetchone()
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Неверный пин-код")
     token = secrets.token_hex(32)
     expires = (datetime.now() + timedelta(days=90)).isoformat()
-    # Сохраняем сессию в user_sessions (множество активных сессий)
     conn.execute(
         "INSERT INTO user_sessions (user_id, token, token_expires) VALUES (?,?,?)",
         (user["id"], token, expires)
     )
-    # Обратная совместимость: обновляем и в users
     conn.execute("UPDATE users SET token=?, token_expires=? WHERE id=?",
                  (token, expires, user["id"]))
     conn.commit()
+    first_login = bool(user.get("first_login", 0))
     conn.close()
     return {
         "token": token,
         "name": user["name"],
         "role": user["role"],
         "store_id": user["store_id"],
+        "first_login": first_login,
         "store_name": STORE_DATA.get(user["store_id"], {}).get("name") if user["store_id"] else None
     }
+
+@app.post("/api/change_pin")
+def change_pin(body: dict, user=Depends(require_auth)):
+    new_pin = body.get("new_pin", "").strip()
+    if not new_pin or len(new_pin) < 4:
+        raise HTTPException(status_code=400, detail="Пин-код минимум 4 цифры")
+    if not new_pin.isdigit():
+        raise HTTPException(status_code=400, detail="Пин-код должен состоять только из цифр")
+    new_hash = hash_pin(new_pin)
+    conn = get_db()
+    conn.execute("UPDATE users SET pin_hash=?, first_login=0 WHERE id=?", (new_hash, user["id"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+@app.post("/api/reset_pin/{user_id}")
+def reset_pin(user_id: int, admin=Depends(require_admin)):
+    default_hash = hashlib.sha256("1111".encode()).hexdigest()
+    conn = get_db()
+    row = conn.execute("SELECT id FROM users WHERE id=? AND role='director'", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Директор не найден")
+    conn.execute("UPDATE users SET pin_hash=?, first_login=1 WHERE id=?", (default_hash, user_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 @app.post("/api/logout")
 def logout(user=Depends(require_auth)):
@@ -463,10 +527,11 @@ def get_summary_compat(days_total: int = 31, forecast_pct: int = 100, mode: str 
 @app.get("/api/users")
 def get_users(user=Depends(require_admin)):
     conn = get_db()
-    users = conn.execute("SELECT id, name, store_id, role, created_at FROM users").fetchall()
+    users = conn.execute("SELECT id, name, store_id, role, first_login, created_at FROM users").fetchall()
     conn.close()
     return [{"id": u["id"], "name": u["name"], "store_id": u["store_id"],
-             "role": u["role"], "store_name": STORE_DATA.get(u["store_id"], {}).get("name") if u["store_id"] else None,
+             "role": u["role"], "first_login": bool(u.get("first_login", 0)),
+             "store_name": STORE_DATA.get(u["store_id"], {}).get("name") if u["store_id"] else None,
              "created_at": str(u["created_at"])} for u in users]
 
 @app.post("/api/users")

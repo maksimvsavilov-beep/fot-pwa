@@ -260,7 +260,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
     </div>
     <div class="login-brand">kari<span>kids</span></div>
     <div class="login-city">Москва 2 КК</div>
-    <div class="login-sub">ФОТ Калькулятор — введите пин-код</div>
+    <div style="width:100%;max-width:280px;margin-bottom:16px">
+      <input id="login-store-id" type="number" inputmode="numeric" placeholder="Номер магазина (напр. 15159)"
+        style="width:100%;padding:12px 14px;border:1.5px solid #f0d0dc;border-radius:12px;font-size:15px;
+               text-align:center;box-sizing:border-box;outline:none;background:#fff;"
+        onfocus="this.style.borderColor='#C0135A'" onblur="this.style.borderColor='#f0d0dc'">
+      <div style="font-size:11px;color:#aaa;text-align:center;margin-top:5px">
+        Для входа администратора — оставьте пустым
+      </div>
+    </div>
+    <div class="login-sub" style="margin-bottom:12px">Пин-код</div>
     <div class="pin-display" id="pin-display">
       <div class="pin-dot" id="d0"></div>
       <div class="pin-dot" id="d1"></div>
@@ -284,6 +293,79 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
       <button class="pin-key submit" onclick="pinSubmit()">→</button>
     </div>
     <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- ══ Экран смены пин-кода (первый вход) ═══════════════════════════════════ -->
+<div id="screen-changepin" class="screen">
+  <div class="login-wrap">
+    <div class="login-logo">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="lg3" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#f06090"/>
+            <stop offset="50%" stop-color="#C0135A"/>
+            <stop offset="100%" stop-color="#8c003e"/>
+          </radialGradient>
+        </defs>
+        <path d="M50 8 C28 8 14 24 14 42 C14 62 50 92 50 92 C50 92 86 62 86 42 C86 24 72 8 50 8Z" fill="url(#lg3)"/>
+        <circle cx="50" cy="40" r="16" fill="white" opacity="0.92"/>
+        <ellipse cx="40" cy="26" rx="10" ry="6" fill="white" opacity="0.25" transform="rotate(-20,40,26)"/>
+      </svg>
+    </div>
+    <div class="login-brand">kari<span>kids</span></div>
+    <div class="login-city" style="color:#C0135A">Добро пожаловать!</div>
+    <div class="login-sub" id="cp-store-label" style="margin-bottom:4px;font-weight:600;color:#C0135A"></div>
+    <div style="font-size:13px;color:#888;text-align:center;margin-bottom:20px">
+      Установите новый пин-код для вашего аккаунта
+    </div>
+    <div id="cp-step1">
+      <div class="login-sub" style="margin-bottom:10px">Новый пин-код</div>
+      <div class="pin-display" id="cp-pin-display1">
+        <div class="pin-dot" id="cp0"></div>
+        <div class="pin-dot" id="cp1"></div>
+        <div class="pin-dot" id="cp2"></div>
+        <div class="pin-dot" id="cp3"></div>
+      </div>
+      <div class="pin-grid">
+        <button class="pin-key" onclick="cpKey('1')">1</button>
+        <button class="pin-key" onclick="cpKey('2')">2</button>
+        <button class="pin-key" onclick="cpKey('3')">3</button>
+        <button class="pin-key" onclick="cpKey('4')">4</button>
+        <button class="pin-key" onclick="cpKey('5')">5</button>
+        <button class="pin-key" onclick="cpKey('6')">6</button>
+        <button class="pin-key" onclick="cpKey('7')">7</button>
+        <button class="pin-key" onclick="cpKey('8')">8</button>
+        <button class="pin-key" onclick="cpKey('9')">9</button>
+        <button class="pin-key del" onclick="cpDel()">⌫</button>
+        <button class="pin-key" onclick="cpKey('0')">0</button>
+        <button class="pin-key submit" onclick="cpNext()">→</button>
+      </div>
+    </div>
+    <div id="cp-step2" style="display:none">
+      <div class="login-sub" style="margin-bottom:10px">Повторите пин-код</div>
+      <div class="pin-display" id="cp-pin-display2">
+        <div class="pin-dot" id="cp20"></div>
+        <div class="pin-dot" id="cp21"></div>
+        <div class="pin-dot" id="cp22"></div>
+        <div class="pin-dot" id="cp23"></div>
+      </div>
+      <div class="pin-grid">
+        <button class="pin-key" onclick="cpKey2('1')">1</button>
+        <button class="pin-key" onclick="cpKey2('2')">2</button>
+        <button class="pin-key" onclick="cpKey2('3')">3</button>
+        <button class="pin-key" onclick="cpKey2('4')">4</button>
+        <button class="pin-key" onclick="cpKey2('5')">5</button>
+        <button class="pin-key" onclick="cpKey2('6')">6</button>
+        <button class="pin-key" onclick="cpKey2('7')">7</button>
+        <button class="pin-key" onclick="cpKey2('8')">8</button>
+        <button class="pin-key" onclick="cpKey2('9')">9</button>
+        <button class="pin-key del" onclick="cpDel2()">⌫</button>
+        <button class="pin-key" onclick="cpKey2('0')">0</button>
+        <button class="pin-key submit" onclick="cpSubmit()">✓</button>
+      </div>
+    </div>
+    <div class="pin-error" id="cp-error"></div>
   </div>
 </div>
 
@@ -449,17 +531,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
     <!-- Управление директорами -->
     <div id="admin-users" style="display:none">
       <div class="card">
-        <div class="card-title">Добавить директора</div>
-        <div class="form-row"><label>Имя</label><input type="text" id="new-name" placeholder="Фамилия Имя"></div>
-        <div class="form-row">
-          <label>Магазин</label>
-          <select id="new-store"><option value="">— выберите —</option></select>
+        <div class="card-title">Директора магазинов</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">
+          Аккаунты создаются автоматически для каждого магазина. Начальный пин-код: <b>1111</b>.
+          При первом входе директор устанавливает свой пин-код.
         </div>
-        <div class="form-row"><label>Пин-код (мин. 4 цифры)</label><input type="number" id="new-pin" placeholder="например: 7841"></div>
-        <button class="btn btn-primary" onclick="createUser()">Добавить</button>
-      </div>
-      <div class="card">
-        <div class="card-title">Список директоров</div>
         <div id="users-list"><div class="loading">...</div></div>
       </div>
     </div>
@@ -522,8 +598,8 @@ async function apiUpload(path, formData) {
 function show(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + screenId).classList.add('active');
-  const isLogin = screenId === 'login';
-  document.getElementById('app-header').style.display = isLogin ? 'none' : 'block';
+  const noHeader = screenId === 'login' || screenId === 'changepin';
+  document.getElementById('app-header').style.display = noHeader ? 'none' : 'block';
 }
 
 // ── Пин-код ────────────────────────────────────────────────────────────────
@@ -551,15 +627,86 @@ function pinDel() {
 async function pinSubmit() {
   if (!pinValue) return;
   try {
-    const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ pin: pinValue }) });
+    const storeInput = document.getElementById('login-store-id').value.trim();
+    const body = { pin: pinValue };
+    if (storeInput) body.store_id = parseInt(storeInput);
+    const data = await api('/api/login', { method: 'POST', body: JSON.stringify(body) });
     token = data.token;
     localStorage.setItem('token', token);
     currentUser = data;
-    afterLogin();
+    if (data.first_login && data.role === 'director') {
+      document.getElementById('cp-store-label').textContent =
+        data.store_name ? `Магазин ${data.store_id} — ${data.store_name}` : `Магазин ${data.store_id}`;
+      cpPin1 = ''; cpPin2 = '';
+      document.getElementById('cp-step1').style.display = 'block';
+      document.getElementById('cp-step2').style.display = 'none';
+      document.getElementById('cp-error').textContent = '';
+      updateCpDots();
+      show('changepin');
+    } else {
+      afterLogin();
+    }
   } catch (e) {
     document.getElementById('pin-error').textContent = e.message;
     pinValue = '';
     updateDots();
+  }
+}
+
+// ── Смена PIN при первом входе ─────────────────────────────────────────────
+let cpPin1 = '', cpPin2 = '';
+
+function updateCpDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('cp' + i).classList.toggle('filled', i < cpPin1.length);
+  }
+}
+function updateCpDots2() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('cp2' + i).classList.toggle('filled', i < cpPin2.length);
+  }
+}
+function cpKey(k) {
+  if (cpPin1.length >= 4) return;
+  cpPin1 += k;
+  updateCpDots();
+  document.getElementById('cp-error').textContent = '';
+  if (cpPin1.length === 4) setTimeout(cpNext, 150);
+}
+function cpDel() { cpPin1 = cpPin1.slice(0, -1); updateCpDots(); }
+function cpNext() {
+  if (cpPin1.length < 4) { document.getElementById('cp-error').textContent = 'Введите 4 цифры'; return; }
+  document.getElementById('cp-step1').style.display = 'none';
+  document.getElementById('cp-step2').style.display = 'block';
+  cpPin2 = ''; updateCpDots2();
+}
+function cpKey2(k) {
+  if (cpPin2.length >= 4) return;
+  cpPin2 += k;
+  updateCpDots2();
+  document.getElementById('cp-error').textContent = '';
+  if (cpPin2.length === 4) setTimeout(cpSubmit, 150);
+}
+function cpDel2() { cpPin2 = cpPin2.slice(0, -1); updateCpDots2(); }
+async function cpSubmit() {
+  if (cpPin2.length < 4) return;
+  if (cpPin1 !== cpPin2) {
+    document.getElementById('cp-error').textContent = 'Пин-коды не совпадают';
+    cpPin2 = ''; updateCpDots2();
+    document.getElementById('cp-step1').style.display = 'block';
+    document.getElementById('cp-step2').style.display = 'none';
+    cpPin1 = ''; updateCpDots();
+    return;
+  }
+  try {
+    await api('/api/change_pin', { method: 'POST', body: JSON.stringify({ new_pin: cpPin1 }) });
+    currentUser.first_login = false;
+    afterLogin();
+  } catch(e) {
+    document.getElementById('cp-error').textContent = e.message;
+    cpPin1 = ''; cpPin2 = ''; updateCpDots(); updateCpDots2();
+    document.getElementById('cp-step1').style.display = 'block';
+    document.getElementById('cp-step2').style.display = 'none';
   }
 }
 
@@ -589,6 +736,8 @@ function logout() {
   localStorage.removeItem('token');
   pinValue = '';
   updateDots();
+  const sid = document.getElementById('login-store-id');
+  if (sid) sid.value = '';
   show('login');
 }
 
@@ -850,11 +999,13 @@ function initFotMonth() {
 async function loadStoresList() {
   try {
     storesList = await api('/api/stores');
-    const sel = document.getElementById('new-store');
-    sel.innerHTML = '<option value="">— выберите магазин —</option>';
-    storesList.forEach(s => {
-      sel.innerHTML += `<option value="${s.id}">${s.id} — ${s.name}</option>`;
-    });
+    const sel = document.getElementById('sched-store');
+    if (sel) {
+      sel.innerHTML = '';
+      storesList.forEach(s => {
+        sel.innerHTML += `<option value="${s.id}">${s.id} — ${s.name}</option>`;
+      });
+    }
   } catch (e) {}
 }
 
@@ -863,37 +1014,28 @@ async function loadUsers() {
   try {
     const users = await api('/api/users');
     const directors = users.filter(u => u.role === 'director');
-    if (!directors.length) { el.innerHTML = '<div class="empty">Директора не добавлены</div>'; return; }
-    el.innerHTML = directors.map(u => `<div class="user-item">
-      <div class="user-info">
-        <div class="user-name">${u.name}</div>
-        <div class="user-meta">${u.store_id ? `${u.store_id} — ${u.store_name || ''}` : 'Магазин не назначен'}</div>
-      </div>
-      <button class="user-del" onclick="deleteUser(${u.id}, '${u.name}')">Удалить</button>
-    </div>`).join('');
+    if (!directors.length) { el.innerHTML = '<div class="empty">Нет директоров</div>'; return; }
+    el.innerHTML = directors.map(u => {
+      const pinStatus = u.first_login
+        ? '<span style="color:#e65100;font-size:11px">⚠ Пин не сменён (1111)</span>'
+        : '<span style="color:var(--green);font-size:11px">✓ Пин установлен</span>';
+      return `<div class="user-item">
+        <div class="user-info">
+          <div class="user-name">Магазин ${u.store_id}${u.store_name ? ' — ' + u.store_name : ''}</div>
+          <div class="user-meta">${pinStatus}</div>
+        </div>
+        <button class="user-del" style="background:#f0f0f0;color:#555;font-size:11px;padding:5px 8px"
+          onclick="resetPin(${u.id})">Сброс пин</button>
+      </div>`;
+    }).join('');
   } catch (e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
 }
 
-async function createUser() {
-  const name = document.getElementById('new-name').value.trim();
-  const store_id = document.getElementById('new-store').value;
-  const pin = document.getElementById('new-pin').value.trim();
-  if (!name || !pin) { toast('Заполните имя и пин-код'); return; }
+async function resetPin(id) {
+  if (!confirm('Сбросить пин-код до 1111? Директор сменит его при следующем входе.')) return;
   try {
-    await api('/api/users', { method: 'POST', body: JSON.stringify({ name, store_id: store_id ? parseInt(store_id) : null, pin, role: 'director' }) });
-    toast('Директор добавлен');
-    document.getElementById('new-name').value = '';
-    document.getElementById('new-pin').value = '';
-    document.getElementById('new-store').value = '';
-    loadUsers();
-  } catch (e) { toast(e.message); }
-}
-
-async function deleteUser(id, name) {
-  if (!confirm(`Удалить "${name}"?`)) return;
-  try {
-    await api(`/api/users/${id}`, { method: 'DELETE' });
-    toast('Удалён');
+    await api(`/api/reset_pin/${id}`, { method: 'POST' });
+    toast('Пин сброшен до 1111');
     loadUsers();
   } catch (e) { toast(e.message); }
 }
