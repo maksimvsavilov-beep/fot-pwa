@@ -390,30 +390,63 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 <div id="screen-director" class="screen">
   <div class="content">
 
-    <div class="card">
-      <div class="card-title">Параметры</div>
-      <div class="params-row">
-        <div class="param-item">
-          <label>Дней в месяце</label>
-          <input type="number" id="d-days" value="31" min="28" max="31">
-        </div>
-        <div class="param-item">
-          <label>Режим прогноза</label>
-          <select id="d-mode">
-            <option value="avg">Экстраполяция</option>
-            <option value="plan">По % плана</option>
-          </select>
-        </div>
-        <div class="param-item" id="d-pct-wrap" style="display:none">
-          <label>% плана</label>
-          <input type="number" id="d-pct" value="100" min="50" max="150">
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="loadDirectorData()">Обновить</button>
+    <div class="admin-nav">
+      <button id="dtab-summary" class="active" onclick="dirTab('summary')">Сводка</button>
+      <button id="dtab-schedule" onclick="dirTab('schedule')">График</button>
     </div>
 
-    <div id="director-content">
-      <div class="loading">Загрузка данных...</div>
+    <!-- Сводка -->
+    <div id="dir-summary">
+      <div class="card">
+        <div class="card-title">Параметры</div>
+        <div class="params-row">
+          <div class="param-item">
+            <label>Дней в месяце</label>
+            <input type="number" id="d-days" value="31" min="28" max="31">
+          </div>
+          <div class="param-item">
+            <label>Режим прогноза</label>
+            <select id="d-mode">
+              <option value="avg">Экстраполяция</option>
+              <option value="plan">По % плана</option>
+            </select>
+          </div>
+          <div class="param-item" id="d-pct-wrap" style="display:none">
+            <label>% плана</label>
+            <input type="number" id="d-pct" value="100" min="50" max="150">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadDirectorData()">Обновить</button>
+      </div>
+      <div id="director-content">
+        <div class="loading">Загрузка данных...</div>
+      </div>
+    </div>
+
+    <!-- График -->
+    <div id="dir-schedule" style="display:none">
+      <div class="card">
+        <div class="card-title">График работы на месяц</div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;color:var(--gray);display:block;margin-bottom:3px">Месяц</label>
+          <input type="month" id="dir-sched-month" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="loadDirSchedule()">Загрузить</button>
+          <button class="btn btn-outline" style="flex:1" onclick="saveDirSchedule()">💾 Сохранить</button>
+          <button class="btn btn-outline" style="flex:0 0 auto;padding:13px 16px" onclick="exportDirSchedule()" title="Скачать Excel">📥</button>
+        </div>
+      </div>
+      <div id="dir-schedule-legend" class="card" style="display:none">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px">
+          <span style="background:#C6EFCE;padding:2px 8px;border-radius:4px">число — часы работы</span>
+          <span style="background:#D9D9D9;padding:2px 8px;border-radius:4px">В — выходной</span>
+          <span style="background:#FFEB9C;padding:2px 8px;border-radius:4px">О — отпуск</span>
+          <span style="background:#FFC7CE;padding:2px 8px;border-radius:4px">Б — больничный</span>
+          <span style="background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #ddd">нажмите ячейку для изменения</span>
+        </div>
+      </div>
+      <div id="dir-schedule-content"><div class="empty">Выберите месяц и нажмите Загрузить</div></div>
     </div>
 
   </div>
@@ -725,7 +758,9 @@ function afterLogin() {
     initSchedMonth();
   } else {
     show('director');
+    dirTab('summary');
     loadDirectorData();
+    initDirSchedMonth();
   }
 }
 
@@ -825,6 +860,139 @@ function renderStoreDetail(d) {
       ФОТ/ТО: <span class="${ec}">${fp(d.fot_to_pct)}</span>
     </div>
   </div>`;
+}
+
+// ── Вкладки директора ──────────────────────────────────────────────────────
+function dirTab(tab) {
+  ['summary', 'schedule'].forEach(t => {
+    document.getElementById('dir-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('dtab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'schedule') initDirSchedMonth();
+}
+
+function initDirSchedMonth() {
+  const el = document.getElementById('dir-sched-month');
+  if (!el.value) {
+    const now = new Date();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    el.value = `${now.getFullYear()}-${m}`;
+  }
+}
+
+let dirScheduleData = null;
+
+async function loadDirSchedule() {
+  const storeId = currentUser?.store_id;
+  const month   = document.getElementById('dir-sched-month').value;
+  if (!storeId || !month) { toast('Нет данных магазина'); return; }
+  const el = document.getElementById('dir-schedule-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    dirScheduleData = await api(`/api/schedule/${storeId}/${month}`);
+    renderDirSchedule();
+    document.getElementById('dir-schedule-legend').style.display = 'block';
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+function renderDirSchedule() {
+  if (!dirScheduleData) return;
+  const {days_in_month, weekdays, employees} = dirScheduleData;
+  if (!employees.length) {
+    document.getElementById('dir-schedule-content').innerHTML =
+      '<div class="empty">Нет данных о сотрудниках. Сначала загрузите файл мотивации.</div>';
+    return;
+  }
+  let thead = '<tr><th class="sched-name">Сотрудник</th><th class="sched-role">Должность</th>';
+  for (let d = 0; d < days_in_month; d++) {
+    const wd = weekdays[d]; const isWe = wd >= 5;
+    thead += `<th class="${isWe?'th-we':''}">${d+1}<br><span style="font-weight:400;font-size:10px">${WD_NAMES[wd]}</span></th>`;
+  }
+  thead += '<th>Итого (ч)</th></tr>';
+  let tbody = '';
+  employees.forEach((emp, ei) => {
+    let total = emp.days.reduce((s, v) => s + (parseInt(v) || 0), 0);
+    let cells = '';
+    for (let d = 0; d < days_in_month; d++) {
+      const val = emp.days[d] || '';
+      const wd = weekdays[d]; const isWe = wd >= 5;
+      cells += `<td class="sched-cell ${cellClass(val,isWe)}" data-src="dir" data-ei="${ei}" data-day="${d}" onclick="editDirCell(this)">${cellDisplay(val,isWe)}</td>`;
+    }
+    tbody += `<tr><td class="sched-name">${emp.name}</td><td class="sched-role">${emp.role}</td>${cells}<td class="sched-total" id="dtotal-${ei}">${total||0}</td></tr>`;
+  });
+  document.getElementById('dir-schedule-content').innerHTML = `
+    <div class="sched-wrap"><table class="sched-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+}
+
+function editDirCell(el) {
+  const ei  = parseInt(el.dataset.ei);
+  const day = parseInt(el.dataset.day);
+  const cur = dirScheduleData.employees[ei].days[day] || '';
+  closePopup();
+  const popup = document.createElement('div');
+  popup.id = 'cell-popup';
+  popup.className = 'cell-popup';
+  popup.innerHTML = `
+    <div style="font-size:11px;color:#888;margin-bottom:6px">Рабочие часы</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="number" id="cp-hours" min="1" max="24" placeholder="ч"
+        value="${/^\d+$/.test(cur) ? cur : ''}"
+        style="width:60px;font-size:18px;padding:4px 6px;border:1.5px solid var(--blue);border-radius:6px;text-align:center"
+        onkeydown="if(event.key==='Enter')setDirCellVal(${ei},${day},'hours')">
+      <button onclick="setDirCellVal(${ei},${day},'hours')" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:14px;cursor:pointer">✓</button>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:8px">
+      <button class="cp-btn s-v" onclick="setDirCellVal(${ei},${day},'В')">В</button>
+      <button class="cp-btn s-o" onclick="setDirCellVal(${ei},${day},'О')">О</button>
+      <button class="cp-btn s-b" onclick="setDirCellVal(${ei},${day},'Б')">Б</button>
+      <button class="cp-btn" onclick="setDirCellVal(${ei},${day},'')" style="background:#f0f0f0;color:#666">✕</button>
+    </div>`;
+  const rect = el.getBoundingClientRect();
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 4;
+  if (left + 150 > window.innerWidth) left = window.innerWidth - 155;
+  popup.style.left = left + 'px'; popup.style.top = top + 'px';
+  document.body.appendChild(popup);
+  const inp = document.getElementById('cp-hours');
+  inp.focus(); inp.select();
+  setTimeout(() => document.addEventListener('click', _popupOutside), 50);
+}
+
+function setDirCellVal(ei, day, val) {
+  let value = val;
+  if (val === 'hours') {
+    const h = parseInt(document.getElementById('cp-hours')?.value);
+    value = (!isNaN(h) && h >= 1 && h <= 24) ? String(h) : '';
+  }
+  dirScheduleData.employees[ei].days[day] = value;
+  const wd = dirScheduleData.weekdays[day]; const isWe = wd >= 5;
+  const cell = document.querySelector(`td[data-src="dir"][data-ei="${ei}"][data-day="${day}"]`);
+  if (cell) { cell.className = 'sched-cell ' + cellClass(value, isWe); cell.textContent = cellDisplay(value, isWe); }
+  const total = dirScheduleData.employees[ei].days.reduce((s, v) => s + (parseInt(v) || 0), 0);
+  document.getElementById('dtotal-' + ei).textContent = total || 0;
+  closePopup();
+}
+
+async function saveDirSchedule() {
+  if (!dirScheduleData) { toast('Нет данных для сохранения'); return; }
+  const {store_id, month, employees} = dirScheduleData;
+  try {
+    await api(`/api/schedule/${store_id}/${month}`, { method: 'POST', body: JSON.stringify({employees}) });
+    toast('График сохранён ✓');
+  } catch(e) { toast(e.message); }
+}
+
+async function exportDirSchedule() {
+  if (!dirScheduleData) { toast('Сначала загрузите график'); return; }
+  const {store_id, month} = dirScheduleData;
+  const url = `/api/schedule/${store_id}/${month}/export`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) { toast('Ошибка экспорта'); return; }
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `schedule_${store_id}_${month}.xlsx`;
+  a.click();
 }
 
 // ── Режим прогноза ─────────────────────────────────────────────────────────
