@@ -184,14 +184,8 @@ def hash_pin(pin: str) -> str:
     return hashlib.sha256(pin.strip().encode()).hexdigest()
 
 def plan_coef(pct: float) -> float:
-    if pct < 80:   return 0.70
-    if pct < 90:   return 0.80
-    if pct < 95:   return 0.90
-    if pct < 100:  return 0.95
-    if pct <= 105: return 1.00
-    if pct <= 110: return 1.05
-    if pct <= 120: return 1.10
-    return 1.15
+    coef = pct / 100.0
+    return min(round(coef, 4), 1.10)
 
 def get_user_by_token(token: str):
     if not token:
