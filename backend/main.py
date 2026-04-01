@@ -641,8 +641,8 @@ def get_schedule(store_id: int, month: str, user=Depends(require_auth)):
             ) sub
             ORDER BY
                 CASE
-                    WHEN role LIKE '%Директор%' THEN 1
-                    WHEN role LIKE '%Администратор%' THEN 2
+                    WHEN role LIKE '%%Директор%%' THEN 1
+                    WHEN role LIKE '%%Администратор%%' THEN 2
                     ELSE 3
                 END, name
         """, (store_id,)).fetchall()
