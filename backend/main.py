@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-ADMIN_PIN = os.environ.get("ADMIN_PIN", "5712")
+ADMIN_PIN = "5712"  # Фиксированный PIN администратора
 
 # ─── Справочник магазинов ────────────────────────────────────────────────────
 STORE_DATA = {
