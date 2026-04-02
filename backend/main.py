@@ -61,8 +61,9 @@ def get_store_ref_from_conn(store_id: int, conn) -> dict:
             "ac":   float(row["ac"] or 0),
             "sc":   float(row["sc"] or 0),
             "nc":   float(row["nc"] or 0),
-            "cl":   int(row["cl"]   or 0),
-            "ld":   int(row["ld"]   or 0),
+            "cl":       int(row["cl"]        or 0),
+            "ld":       int(row["ld"]        or 0),
+            "fot_total": int(row["fot_total"] or 0) if "fot_total" in row else 0,
         }
     return STORE_DATA.get(store_id)
 
@@ -184,7 +185,12 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN first_login INTEGER DEFAULT 1")
         conn.commit()
     except Exception:
-        conn.rollback()  # Сбрасываем упавшую транзакцию (колонка уже существует)
+        conn.rollback()
+    try:
+        conn.execute("ALTER TABLE fot_plan ADD COLUMN fot_total INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        conn.rollback()  # Колонка уже существует
 
     # Создаём или обновляем аккаунт администратора
     pin_hash = hashlib.sha256(ADMIN_PIN.encode()).hexdigest()
@@ -513,19 +519,27 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         0 if "Директор" in x["role"] else 1 if "Администратор" in x["role"] else 2
     ))
 
-    # Плановый ФОТ бюджет = только зарплаты (без клининга и погрузки)
-    budget_fot = sum(get_rate(r["role"]) for r in staff)
+    # Плановый ФОТ = "ЗП ИТОГО" из файла ФОТ
+    planned_fot = ref.get("fot_total", 0) or 0
+    # Если данных из файла нет — считаем по ставкам как запасной вариант
+    if planned_fot <= 0:
+        planned_fot = sum(get_rate(r["role"]) for r in staff)
 
-    # Максимально допустимый ФОТ = бюджет × коэф плана (макс 1.10)
-    max_fot = round(budget_fot * coef)
+    # Максимально допустимый ФОТ = плановый × коэф плана (макс 110%)
+    max_fot = round(planned_fot * coef)
 
-    # Расчётный ФОТ = только зарплаты сотрудников (без клининга и погрузки)
+    # Расчётные зарплаты сотрудников
+    fot_wages_raw = sum(s["forecast_salary"] for s in staff_list)
+
+    # Если сумма превышает лимит — пропорционально уменьшаем каждому
+    if fot_wages_raw > max_fot and fot_wages_raw > 0:
+        scale = max_fot / fot_wages_raw
+        for s in staff_list:
+            s["forecast_salary"] = round(s["forecast_salary"] * scale)
+
     fot_wages = sum(s["forecast_salary"] for s in staff_list)
-    forecast_fot_raw = fot_wages
-
-    # Применяем лимит
-    fot_capped = forecast_fot_raw > max_fot
-    forecast_fot = min(forecast_fot_raw, max_fot)
+    forecast_fot = fot_wages
+    fot_capped = fot_wages_raw > max_fot
 
     rest_fot = max(0, forecast_fot - fact_fot)
 
@@ -542,7 +556,8 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         "forecast_plan_pct": round(plan_pct, 1),
         "coef": coef,
         "fot_wages": round(fot_wages),
-        "budget_fot": round(budget_fot),
+        "planned_fot": round(planned_fot),
+        "budget_fot": round(planned_fot),  # backward compat
         "max_fot": round(max_fot),
         "fot_capped": fot_capped,
         "extra": extra,
@@ -702,18 +717,19 @@ async def upload_fot(file: UploadFile = File(...), month: str = "", user=Depends
 
         conn.execute("""
             INSERT INTO fot_plan
-            (store_id, month, dc, ac, sc, nc, plan, sr, ar, dr, cl, ld)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            (store_id, month, dc, ac, sc, nc, plan, sr, ar, dr, fot_total, cl, ld)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             sid, month,
-            safe_float(row.iloc[sid_col + 4]),   # Директор
-            safe_float(row.iloc[sid_col + 5]),   # Администратор
-            safe_float(row.iloc[sid_col + 6]),   # Продавец штат
-            safe_float(row.iloc[sid_col + 7]),   # Продавец наймикс
-            safe_int(row.iloc[sid_col + 8]),     # бюджет ТО
+            safe_float(row.iloc[sid_col + 4]),   # Директор (кол-во)
+            safe_float(row.iloc[sid_col + 5]),   # Администратор (кол-во)
+            safe_float(row.iloc[sid_col + 6]),   # Продавец штат (кол-во)
+            safe_float(row.iloc[sid_col + 7]),   # Продавец наймикс (кол-во)
+            safe_int(row.iloc[sid_col + 8]),     # бюджет ТО (план)
             safe_int(row.iloc[sid_col + 9]),     # Средняя ЗП Продавца
             safe_int(row.iloc[sid_col + 10]),    # Зарплата АМ
             safe_int(row.iloc[sid_col + 11]),    # Зарплата ДМ
+            safe_int(row.iloc[sid_col + 12]),    # ЗП ИТОГО (плановый ФОТ)
             safe_int(row.iloc[sid_col + 18]),    # Клининг
             safe_int(row.iloc[sid_col + 20]),    # Разгрузка погрузка
         ))
