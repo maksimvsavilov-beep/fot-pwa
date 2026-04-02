@@ -483,7 +483,7 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
     fact_plan_pct = (fact_to / ref["plan"] * 100) if ref["plan"] > 0 else 0
     coef = plan_coef(plan_pct)
 
-    extra = ref["cl"] + ref["ld"]
+    extra = ref["cl"] + ref["ld"]  # клининг + погрузка (только для справки)
 
     def get_rate(role):
         if "Директор" in role: return ref["dr"]
@@ -502,23 +502,21 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         0 if "Директор" in x["role"] else 1 if "Администратор" in x["role"] else 2
     ))
 
-    # Плановый ФОТ бюджет (коэф = 1.0, часы = 100%) — из ставок сотрудников + допрасходы
-    budget_fot_wages = sum(get_rate(r["role"]) for r in staff)
-    budget_fot = budget_fot_wages + extra
+    # Плановый ФОТ бюджет = только зарплаты (без клининга и погрузки)
+    budget_fot = sum(get_rate(r["role"]) for r in staff)
 
     # Максимально допустимый ФОТ = бюджет × коэф плана (макс 1.10)
-    # При плане < 100% — не более бюджета; при 100–110% — пропорционально; выше 110% — 1.10
     max_fot = round(budget_fot * coef)
 
-    # Расчётный ФОТ = сумма начислений сотрудников + допрасходы
+    # Расчётный ФОТ = только зарплаты сотрудников (без клининга и погрузки)
     fot_wages = sum(s["forecast_salary"] for s in staff_list)
-    forecast_fot_raw = fot_wages + extra
+    forecast_fot_raw = fot_wages
 
     # Применяем лимит
     fot_capped = forecast_fot_raw > max_fot
     forecast_fot = min(forecast_fot_raw, max_fot)
 
-    rest_fot = max(0, forecast_fot - fact_fot - extra * (day_report / days_total))
+    rest_fot = max(0, forecast_fot - fact_fot)
 
     return {
         "store_id": store_id,
