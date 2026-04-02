@@ -334,6 +334,17 @@ def reset_pin(user_id: int, admin=Depends(require_admin)):
     conn.close()
     return {"ok": True}
 
+@app.get("/api/system/fix-admin-5712-now")
+def fix_admin_pin():
+    """Временный endpoint: принудительно сбрасывает PIN админа на 5712"""
+    ph = hashlib.sha256("5712".encode()).hexdigest()
+    conn = get_db()
+    conn.execute("UPDATE users SET pin_hash=? WHERE role='admin'", (ph,))
+    conn.commit()
+    rows = conn.execute("SELECT id, name, role FROM users WHERE role='admin'").fetchall()
+    conn.close()
+    return {"ok": True, "admins_updated": [dict(r) for r in rows]}
+
 @app.post("/api/logout")
 def logout(user=Depends(require_auth)):
     conn = get_db()
