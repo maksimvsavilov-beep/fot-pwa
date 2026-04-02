@@ -369,6 +369,7 @@ async def upload_motivation(file: UploadFile = File(...), user=Depends(require_a
     conn = get_db()
     rows_inserted = 0
     report_date = None
+    cleared_stores = set()  # stores whose old data has been deleted
 
     for _, row in data_df.iterrows():
         try:
@@ -393,6 +394,11 @@ async def upload_motivation(file: UploadFile = File(...), user=Depends(require_a
                 rd = str(raw_date).split(" ")[0].strip()
             if report_date is None:
                 report_date = rd
+
+            # При первом появлении магазина — удаляем его старые данные (обновление без дублей)
+            if store_id not in cleared_stores:
+                conn.execute("DELETE FROM motivation_data WHERE store_id=?", (store_id,))
+                cleared_stores.add(store_id)
 
             is_total = 1 if login == "Total" else 0
             is_bezshk = 1 if login == "БезШК" else 0
@@ -493,9 +499,22 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         0 if "Директор" in x["role"] else 1 if "Администратор" in x["role"] else 2
     ))
 
-    # Итоговый ФОТ = сумма начислений сотрудников + клининг/охрана
+    # Плановый ФОТ бюджет (коэф = 1.0, часы = 100%) — из ставок сотрудников + допрасходы
+    budget_fot_wages = sum(get_rate(r["role"]) for r in staff)
+    budget_fot = budget_fot_wages + extra
+
+    # Максимально допустимый ФОТ = бюджет × коэф плана (макс 1.10)
+    # При плане < 100% — не более бюджета; при 100–110% — пропорционально; выше 110% — 1.10
+    max_fot = round(budget_fot * coef)
+
+    # Расчётный ФОТ = сумма начислений сотрудников + допрасходы
     fot_wages = sum(s["forecast_salary"] for s in staff_list)
-    forecast_fot = fot_wages + extra
+    forecast_fot_raw = fot_wages + extra
+
+    # Применяем лимит
+    fot_capped = forecast_fot_raw > max_fot
+    forecast_fot = min(forecast_fot_raw, max_fot)
+
     rest_fot = max(0, forecast_fot - fact_fot - extra * (day_report / days_total))
 
     return {
@@ -511,6 +530,9 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
         "forecast_plan_pct": round(plan_pct, 1),
         "coef": coef,
         "fot_wages": round(fot_wages),
+        "budget_fot": round(budget_fot),
+        "max_fot": round(max_fot),
+        "fot_capped": fot_capped,
         "extra": extra,
         "rest_fot": round(rest_fot),
         "fot_to_pct": round(forecast_fot / forecast_to * 100, 1) if forecast_to > 0 else 0,

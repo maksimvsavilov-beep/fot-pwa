@@ -890,6 +890,7 @@ function renderStoreDetail(d) {
     <div class="metric"><div class="metric-label">Прогноз ТО</div><div class="metric-value">${f(d.forecast_to)}</div></div>
     <div class="metric"><div class="metric-label">Прогноз % плана</div><div class="metric-value">${fp(d.forecast_plan_pct)}</div></div>
     <div class="metric"><div class="metric-label">Факт ФОТ</div><div class="metric-value">${f(d.fact_fot)}</div></div>
+    <div class="metric"><div class="metric-label">Бюджет ФОТ</div><div class="metric-value" style="color:var(--blue)">${f(d.budget_fot||0)}</div></div>
     <div class="metric"><div class="metric-label">Остаток к начисл.</div><div class="metric-value warn">${f(d.rest_fot)}</div></div>
   </div>
 
@@ -904,6 +905,11 @@ function renderStoreDetail(d) {
       <div class="staff-total-label">Итого ФОТ (прогноз)</div>
       <div class="staff-total-val">${f(d.forecast_fot)}</div>
     </div>
+    ${d.budget_fot ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:${d.fot_capped?'#fff3cd':'#f0fdf4'};border-radius:6px;font-size:12px">
+      <span style="color:#666">Бюджет ФОТ (лимит):</span>
+      <span style="font-weight:700;color:${d.fot_capped?'#c0135a':'#16a34a'}">${f(d.max_fot)} ${d.fot_capped?'⚠ лимит':'✓'}</span>
+    </div>` : ''}
     <div style="text-align:right;margin-top:6px;font-size:12px">
       ФОТ/ТО: <span class="${ec}">${fp(d.fot_to_pct)}</span>
     </div>
