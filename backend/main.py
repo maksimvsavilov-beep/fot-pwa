@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-ADMIN_PIN = os.environ.get("ADMIN_PIN", "admin1234")
+ADMIN_PIN = os.environ.get("ADMIN_PIN", "5712")
 
 # ─── Справочник магазинов ────────────────────────────────────────────────────
 STORE_DATA = {
@@ -186,14 +186,17 @@ def init_db():
     except Exception:
         conn.rollback()  # Сбрасываем упавшую транзакцию (колонка уже существует)
 
-    # Создаём аккаунт администратора если нет
+    # Создаём или обновляем аккаунт администратора
+    pin_hash = hashlib.sha256(ADMIN_PIN.encode()).hexdigest()
     if not conn.execute("SELECT id FROM users WHERE role='admin'").fetchone():
-        pin_hash = hashlib.sha256(ADMIN_PIN.encode()).hexdigest()
         conn.execute(
             "INSERT INTO users (name, pin_hash, store_id, role, first_login) VALUES (?,?,NULL,'admin',0)",
             ("Администратор", pin_hash)
         )
-        conn.commit()
+    else:
+        # Принудительно обновляем хэш при каждом старте (подхватывает новый ADMIN_PIN)
+        conn.execute("UPDATE users SET pin_hash=? WHERE role='admin'", (pin_hash,))
+    conn.commit()
 
     # Авто-создаём аккаунты директоров для всех магазинов
     default_pin_hash = hashlib.sha256("1111".encode()).hexdigest()
