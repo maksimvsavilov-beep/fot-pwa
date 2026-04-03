@@ -15,7 +15,8 @@ from openpyxl.utils import get_column_letter
 import imaplib
 import email as email_lib
 from email.header import decode_header as decode_email_header
-from apscheduler.schedulers.background import BackgroundScheduler
+import threading
+import time
 
 # ─── Email настройки (из Railway Variables) ───────────────────────────────────
 EMAIL_HOST     = os.environ.get("EMAIL_HOST", "outlook.office365.com")
@@ -1168,16 +1169,23 @@ def email_status(user=Depends(require_admin)):
         "schedule": f"ежедневно в {EMAIL_HOUR:02d}:{EMAIL_MINUTE:02d}"
     }
 
-# ─── Планировщик ──────────────────────────────────────────────────────────────
-def _scheduled_email_fetch():
-    result = fetch_motivation_from_email()
-    print(f"[Email Auto-Fetch] {datetime.now().isoformat()} → {result}")
+# ─── Планировщик (встроенный threading, без внешних зависимостей) ─────────────
+def _email_scheduler_loop():
+    """Фоновый поток: проверяет время и запускает загрузку раз в день."""
+    last_run_date = None
+    while True:
+        try:
+            now = datetime.utcnow() + timedelta(hours=3)  # MSK
+            if now.hour == EMAIL_HOUR and now.minute == EMAIL_MINUTE and now.date() != last_run_date:
+                last_run_date = now.date()
+                result = fetch_motivation_from_email()
+                print(f"[Email Auto-Fetch] {now.isoformat()} → {result}")
+        except Exception as e:
+            print(f"[Email Auto-Fetch] Ошибка планировщика: {e}")
+        time.sleep(30)  # Проверяем каждые 30 секунд
 
-scheduler = BackgroundScheduler(timezone="Europe/Moscow")
-scheduler.add_job(_scheduled_email_fetch, "cron",
-                  hour=EMAIL_HOUR, minute=EMAIL_MINUTE,
-                  id="auto_motivation_fetch", replace_existing=True)
-scheduler.start()
+_scheduler_thread = threading.Thread(target=_email_scheduler_loop, daemon=True)
+_scheduler_thread.start()
 
 # ─── Отдаём PWA ──────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
