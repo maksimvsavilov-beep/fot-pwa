@@ -561,16 +561,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 
     <!-- Продажи (админ) -->
     <div id="admin-sales" style="display:none">
-      <div class="card">
-        <div class="card-title">Загрузка файла продаж</div>
-        <div class="upload-zone" id="sales-upload-zone" onclick="document.getElementById('sales-xlsx-input').click()">
-          <div class="upload-icon">📊</div>
-          <div class="upload-text">Нажмите для выбора файла</div>
-          <div class="upload-sub">Продажи KIDS_МЕСЯЦ.xlsx</div>
-        </div>
-        <input type="file" id="sales-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadSalesFile(this)">
-      </div>
-      <div id="admin-sales-content"><div class="empty">Загрузите файл продаж</div></div>
+      <div id="admin-sales-content"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- Загрузка файла -->
@@ -613,6 +604,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
       <div class="card">
         <div class="card-title">История загрузок ФОТ</div>
         <div id="fot-upload-log"><div class="loading">...</div></div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-title">📈 Загрузка файла продаж</div>
+        <div class="upload-zone" id="sales-upload-zone" onclick="document.getElementById('sales-xlsx-input').click()">
+          <div class="upload-icon">📊</div>
+          <div class="upload-text">Нажмите для выбора файла</div>
+          <div class="upload-sub">Продажи KIDS_МЕСЯЦ.xlsx</div>
+        </div>
+        <input type="file" id="sales-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadSalesFile(this)">
+      </div>
+      <div class="card">
+        <div class="card-title">История загрузок продаж</div>
+        <div id="sales-upload-log"><div class="loading">...</div></div>
       </div>
     </div>
 
@@ -1300,6 +1305,7 @@ async function uploadSalesFile(input) {
       <div class="upload-sub">${data.rows} строк · ${data.report_date || ''}</div>`;
     toast('Продажи загружены: ' + data.rows + ' строк');
     loadAdminSales();
+    loadSalesLog();
   } catch(e) {
     zone.className = 'upload-zone';
     zone.innerHTML = '<div class="upload-icon">📊</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Продажи KIDS_МЕСЯЦ.xlsx</div>';
@@ -1314,7 +1320,7 @@ async function loadAdminSales() {
   try {
     const data = await api('/api/sales/all');
     if (!data || !data.stores || !data.stores.length) {
-      el.innerHTML = '<div class="empty">Данных нет. Загрузите файл продаж.</div>'; return;
+      el.innerHTML = '<div class="empty">Данных нет. Загрузите файл на вкладке «Загрузка».</div>'; return;
     }
     let divHtml = renderSalesCard(data.division, 'Дивизион Москва 2 КК');
     let storesHtml = `<div class="card"><div class="card-title">Все магазины</div>
@@ -1329,6 +1335,20 @@ async function loadAdminSales() {
       </table></div>`;
     el.innerHTML = divHtml + storesHtml;
   } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function loadSalesLog() {
+  const el = document.getElementById('sales-upload-log');
+  if (!el) return;
+  try {
+    const logs = await api('/api/sales/log');
+    if (!logs.length) { el.innerHTML = '<div class="empty">Загрузок ещё не было</div>'; return; }
+    el.innerHTML = logs.map(l => `<div class="log-item">
+      <div><div class="log-date">${l.report_date || '—'}</div><div class="log-meta">${l.filename}</div></div>
+      <div style="text-align:right"><div class="log-date">${l.rows_count} строк</div>
+      <div class="log-meta">${(l.uploaded_at || '').split('T')[0]}</div></div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
 }
 
 async function fetchFromEmail() {
@@ -1465,7 +1485,7 @@ function adminTab(tab) {
   });
   if (tab === 'summary')  loadSummary();
   if (tab === 'users')    loadUsers();
-  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); }
+  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); loadSalesLog(); }
   if (tab === 'schedule') { initSchedStores(); }
   if (tab === 'sales')    loadAdminSales();
 }
