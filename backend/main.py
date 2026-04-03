@@ -12,6 +12,20 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+import imaplib
+import email as email_lib
+from email.header import decode_header as decode_email_header
+from apscheduler.schedulers.background import BackgroundScheduler
+
+# ─── Email настройки (из Railway Variables) ───────────────────────────────────
+EMAIL_HOST     = os.environ.get("EMAIL_HOST", "outlook.office365.com")
+EMAIL_PORT     = int(os.environ.get("EMAIL_PORT", "993"))
+EMAIL_USER     = os.environ.get("EMAIL_USER", "")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
+EMAIL_SENDER   = os.environ.get("EMAIL_SENDER", "reports@kari.com")
+EMAIL_SUBJECT  = os.environ.get("EMAIL_SUBJECT", "Мотивация KariKids")
+EMAIL_HOUR     = int(os.environ.get("EMAIL_FETCH_HOUR", "9"))
+EMAIL_MINUTE   = int(os.environ.get("EMAIL_FETCH_MINUTE", "0"))
 
 app = FastAPI()
 
@@ -982,6 +996,188 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
+
+# ─── Email авто-загрузка мотивации ───────────────────────────────────────────
+def _decode_filename(raw):
+    parts = decode_email_header(raw)
+    result = ""
+    for part, enc in parts:
+        if isinstance(part, bytes):
+            result += part.decode(enc or "utf-8", errors="replace")
+        else:
+            result += part
+    return result
+
+def fetch_motivation_from_email() -> dict:
+    """Подключается к почте, находит последнее письмо с файлом мотивации и загружает его."""
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        return {"ok": False, "error": "EMAIL_USER / EMAIL_PASSWORD не настроены в Railway Variables"}
+    try:
+        mail = imaplib.IMAP4_SSL(EMAIL_HOST, EMAIL_PORT)
+        mail.login(EMAIL_USER, EMAIL_PASSWORD)
+        mail.select("INBOX")
+
+        # Ищем письма от отправителя с нужной темой
+        _, msgs = mail.search(None, f'FROM "{EMAIL_SENDER}"')
+        ids = msgs[0].split() if msgs[0] else []
+
+        # Дополнительная фильтрация по теме — берём последнее
+        target_id = None
+        for eid in reversed(ids):
+            _, hdr = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+            subj_raw = hdr[0][1].decode("utf-8", errors="replace") if hdr[0] else ""
+            if EMAIL_SUBJECT.lower() in subj_raw.lower():
+                target_id = eid
+                break
+
+        if not target_id:
+            mail.logout()
+            return {"ok": False, "error": f"Письмо с темой '{EMAIL_SUBJECT}' не найдено"}
+
+        _, msg_data = mail.fetch(target_id, "(RFC822)")
+        mail.logout()
+        msg = email_lib.message_from_bytes(msg_data[0][1])
+
+        # Ищем xlsx-вложение
+        attachment_data = None
+        filename = "motivation.xlsx"
+        for part in msg.walk():
+            if part.get_content_disposition() in ("attachment", "inline"):
+                raw_name = part.get_filename()
+                if raw_name:
+                    fname = _decode_filename(raw_name)
+                    if fname.lower().endswith((".xlsx", ".xls")):
+                        attachment_data = part.get_payload(decode=True)
+                        filename = fname
+                        break
+
+        if not attachment_data:
+            return {"ok": False, "error": "xlsx-вложение не найдено в письме"}
+
+        # Обрабатываем файл как загрузку мотивации
+        result = _process_motivation_bytes(attachment_data, filename)
+        result["source"] = "email"
+        return result
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+def _process_motivation_bytes(content: bytes, filename: str) -> dict:
+    """Обрабатывает xlsx-данные мотивации (общий код для upload и email)."""
+    try:
+        df = pd.read_excel(io.BytesIO(content), header=None)
+    except Exception as e:
+        return {"ok": False, "error": f"Ошибка чтения файла: {e}"}
+
+    header_row = None
+    for i, row in df.iterrows():
+        if str(row[0]).strip().startswith("Дата"):
+            header_row = i
+            break
+    if header_row is None:
+        return {"ok": False, "error": "Не найден заголовок 'Дата отчета'"}
+
+    data_df = df.iloc[header_row + 1:].reset_index(drop=True)
+    conn = get_db()
+    rows_inserted = 0
+    report_date = None
+
+    # Определяем store_id из первой валидной строки
+    first_store = None
+    for _, row in data_df.iterrows():
+        try:
+            sid = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
+            if sid and sid in STORE_DATA:
+                first_store = sid
+                break
+        except Exception:
+            continue
+
+    if first_store:
+        conn.execute("DELETE FROM motivation_data WHERE store_id IN (SELECT DISTINCT store_id FROM motivation_data WHERE store_id = ?)", (first_store,))
+
+    # Получим все store_ids из файла для удаления дублей
+    store_ids_in_file = set()
+    for _, row in data_df.iterrows():
+        try:
+            sid = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
+            if sid:
+                store_ids_in_file.add(sid)
+        except Exception:
+            continue
+
+    if store_ids_in_file:
+        placeholders = ",".join(["%s"] * len(store_ids_in_file))
+        conn.execute(f"DELETE FROM motivation_data WHERE store_id IN ({placeholders})", tuple(store_ids_in_file))
+        conn.commit()
+
+    for _, row in data_df.iterrows():
+        try:
+            store_id = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
+            if not store_id:
+                continue
+            login   = str(row[3] or "").strip()
+            role    = str(row[5] or "").strip()
+            name    = str(row[6] or "").strip()
+            to_fact = float(row[7]) if str(row[7]) not in ["nan", ""] else 0
+            pct_to  = float(row[8]) if str(row[8]) not in ["nan", ""] else 0
+            income  = float(row[9]) if str(row[9]) not in ["nan", ""] else 0
+            fdm_val = float(row[10]) if str(row[10]) not in ["nan", ""] else 0
+            raw_date = row[0]
+            if hasattr(raw_date, "strftime"):
+                rd = raw_date.strftime("%d.%m.%Y")
+            else:
+                rd = str(raw_date).split(" ")[0].strip()
+            if report_date is None:
+                report_date = rd
+            is_total   = 1 if login == "Total" else 0
+            is_bezshk  = 1 if login == "БезШК" else 0
+            conn.execute("""
+                INSERT INTO motivation_data
+                    (store_id, report_date, login, role, name, to_fact, pct_to, income, fdm, is_total, is_bezshk)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (store_id, rd, login, role, name, to_fact, pct_to, income, fdm_val, is_total, is_bezshk))
+            rows_inserted += 1
+        except Exception:
+            continue
+
+    conn.execute("INSERT INTO upload_log (filename, report_date, rows_count) VALUES (%s,%s,%s)",
+                 (filename, report_date, rows_inserted))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "filename": filename, "rows": rows_inserted, "report_date": report_date}
+
+
+@app.get("/api/email/fetch-now")
+def email_fetch_now(user=Depends(require_admin)):
+    """Ручной запуск загрузки файла мотивации из почты."""
+    result = fetch_motivation_from_email()
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@app.get("/api/email/status")
+def email_status(user=Depends(require_admin)):
+    """Статус настройки автозагрузки."""
+    return {
+        "configured": bool(EMAIL_USER and EMAIL_PASSWORD),
+        "host": EMAIL_HOST,
+        "user": EMAIL_USER or "не задан",
+        "sender_filter": EMAIL_SENDER,
+        "subject_filter": EMAIL_SUBJECT,
+        "schedule": f"ежедневно в {EMAIL_HOUR:02d}:{EMAIL_MINUTE:02d}"
+    }
+
+# ─── Планировщик ──────────────────────────────────────────────────────────────
+def _scheduled_email_fetch():
+    result = fetch_motivation_from_email()
+    print(f"[Email Auto-Fetch] {datetime.now().isoformat()} → {result}")
+
+scheduler = BackgroundScheduler(timezone="Europe/Moscow")
+scheduler.add_job(_scheduled_email_fetch, "cron",
+                  hour=EMAIL_HOUR, minute=EMAIL_MINUTE,
+                  id="auto_motivation_fetch", replace_existing=True)
+scheduler.start()
 
 # ─── Отдаём PWA ──────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")

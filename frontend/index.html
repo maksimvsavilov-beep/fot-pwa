@@ -544,6 +544,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
         <div id="upload-result"></div>
       </div>
       <div class="card">
+        <div class="card-title">📧 Загрузка из почты</div>
+        <div style="font-size:13px;color:#666;margin-bottom:10px">Автозагрузка работает ежедневно в 09:00. Можно запустить вручную:</div>
+        <button class="btn btn-primary" id="email-fetch-btn" onclick="fetchFromEmail()">📧 Загрузить из почты сейчас</button>
+        <div id="email-fetch-status" style="margin-top:8px;font-size:13px;color:#444"></div>
+      </div>
+      <div class="card">
         <div class="card-title">История загрузок мотивации</div>
         <div id="upload-log"><div class="loading">...</div></div>
       </div>
@@ -1152,6 +1158,26 @@ async function uploadFile(input) {
     res.innerHTML = `<div style="color:var(--red);font-size:13px;margin-top:6px">${e.message}</div>`;
   }
   input.value = '';
+}
+
+async function fetchFromEmail() {
+  const btn = document.getElementById('email-fetch-btn');
+  const st  = document.getElementById('email-fetch-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Подключаюсь к почте...';
+  st.textContent = '';
+  try {
+    const res = await api('/api/email/fetch-now');
+    st.style.color = 'var(--green)';
+    st.textContent = `✓ Загружено: ${res.rows} строк из файла "${res.filename}" (дата отчёта: ${res.report_date || '—'})`;
+    loadUploadLog();
+  } catch(e) {
+    st.style.color = 'var(--red)';
+    st.textContent = '✗ Ошибка: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📧 Загрузить из почты сейчас';
+  }
 }
 
 async function loadUploadLog() {
