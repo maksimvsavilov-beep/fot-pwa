@@ -214,6 +214,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .sched-table .th-we { background: #C8C8C8; }
 .sched-saved { font-size: 12px; color: var(--green); text-align: center; padding: 4px; }
 
+/* ── Продажи KPI ── */
+.sales-date { font-size:12px;color:var(--gray);text-align:right;margin-bottom:8px; }
+.kpi-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px; }
+.kpi-card { background:#fff;border-radius:10px;padding:10px 12px;border:1px solid var(--border); }
+.kpi-label { font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px; }
+.kpi-val { font-size:20px;font-weight:700;color:var(--blue-dark); }
+.kpi-val.green { color:var(--green); }
+.kpi-val.red { color:var(--red); }
+.kpi-div { font-size:11px;color:var(--gray);margin-top:2px; }
+.kpi-div span { font-weight:600;color:#555; }
+.cat-table { width:100%;border-collapse:collapse;font-size:13px;margin-top:6px; }
+.cat-table th { background:#f8cdd9;font-weight:600;padding:6px 8px;text-align:left;font-size:11px; }
+.cat-table td { padding:6px 8px;border-bottom:1px solid #f0f0f0; }
+.cat-table tr:last-child td { border-bottom:none; }
+.lfl-pos { color:var(--green);font-weight:600; }
+.lfl-neg { color:var(--red);font-weight:600; }
+.sales-all-table { width:100%;border-collapse:collapse;font-size:12px;margin-top:6px; }
+.sales-all-table th { background:#f8cdd9;padding:6px 4px;text-align:center;font-size:11px;font-weight:600; }
+.sales-all-table td { padding:5px 4px;border-bottom:1px solid #f0f0f0;text-align:center; }
+.sales-all-table td:first-child { text-align:left;font-weight:500; }
+
 /* ── Попап редактирования ячейки ── */
 .cell-popup { position: absolute; z-index: 500; background: #fff; border: 1.5px solid var(--blue);
   border-radius: 10px; padding: 10px 12px; box-shadow: 0 4px 20px rgba(192,19,90,.20);
@@ -431,6 +452,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 
     <div class="admin-nav">
       <button id="dtab-summary" class="active" onclick="dirTab('summary')">Сводка</button>
+      <button id="dtab-sales" onclick="dirTab('sales')">Продажи</button>
       <button id="dtab-schedule" onclick="dirTab('schedule')">График</button>
     </div>
 
@@ -460,6 +482,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
       <div id="director-content">
         <div class="loading">Загрузка данных...</div>
       </div>
+    </div>
+
+    <!-- Продажи (директор) -->
+    <div id="dir-sales" style="display:none">
+      <div id="dir-sales-content"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- График -->
@@ -496,6 +523,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
   <div class="content">
     <div class="admin-nav">
       <button id="atab-summary" class="active" onclick="adminTab('summary')">Сводка</button>
+      <button id="atab-sales" onclick="adminTab('sales')">Продажи</button>
       <button id="atab-upload" onclick="adminTab('upload')">Загрузка</button>
       <button id="atab-schedule" onclick="adminTab('schedule')">График</button>
       <button id="atab-users" onclick="adminTab('users')">Директора</button>
@@ -529,6 +557,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
         <div class="card-title">Магазины</div>
         <div id="summary-list"><div class="loading">Загрузка...</div></div>
       </div>
+    </div>
+
+    <!-- Продажи (админ) -->
+    <div id="admin-sales" style="display:none">
+      <div class="card">
+        <div class="card-title">Загрузка файла продаж</div>
+        <div class="upload-zone" id="sales-upload-zone" onclick="document.getElementById('sales-xlsx-input').click()">
+          <div class="upload-icon">📊</div>
+          <div class="upload-text">Нажмите для выбора файла</div>
+          <div class="upload-sub">Продажи KIDS_МЕСЯЦ.xlsx</div>
+        </div>
+        <input type="file" id="sales-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadSalesFile(this)">
+      </div>
+      <div id="admin-sales-content"><div class="empty">Загрузите файл продаж</div></div>
     </div>
 
     <!-- Загрузка файла -->
@@ -922,11 +964,12 @@ function renderStoreDetail(d) {
 
 // ── Вкладки директора ──────────────────────────────────────────────────────
 function dirTab(tab) {
-  ['summary', 'schedule'].forEach(t => {
+  ['summary', 'sales', 'schedule'].forEach(t => {
     document.getElementById('dir-' + t).style.display = t === tab ? 'block' : 'none';
     document.getElementById('dtab-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'schedule') initDirSchedMonth();
+  if (tab === 'sales')    loadDirSales();
 }
 
 function initDirSchedMonth() {
@@ -1160,6 +1203,134 @@ async function uploadFile(input) {
   input.value = '';
 }
 
+// ── Продажи: вспомогательные ────────────────────────────────────────────────
+function fmtRub(v) {
+  if (v == null || isNaN(v)) return '—';
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v);
+}
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return '—';
+  return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+}
+function lflClass(v) {
+  if (v == null || isNaN(v)) return '';
+  return v >= 0 ? 'lfl-pos' : 'lfl-neg';
+}
+
+function renderSalesCard(d, title) {
+  if (!d) return '<div class="empty">Нет данных</div>';
+  const planPct = d.plan_pct != null ? d.plan_pct.toFixed(1) + '%' : '—';
+  const planCls = d.plan_pct >= 100 ? 'ok' : d.plan_pct >= 90 ? 'warn' : 'err';
+  const lfl     = d.lfl != null ? fmtPct(d.lfl) : '—';
+  const lflCls  = lflClass(d.lfl);
+  return `
+  <div class="card">
+    <div class="card-title">${title}</div>
+    <div class="sales-date">${d.report_date || ''}</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="metric-label">Выполнение плана</div>
+        <div class="kpi-val ${planCls}">${planPct}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">LFL</div>
+        <div class="kpi-val ${lflCls}">${lfl}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">ТО факт</div>
+        <div class="kpi-val">${fmtRub(d.to_fact)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">Маржа</div>
+        <div class="kpi-val">${d.margin != null ? d.margin.toFixed(1) + '%' : '—'}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">Средний чек</div>
+        <div class="kpi-val">${fmtRub(d.avg_ticket)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">Конверсия</div>
+        <div class="kpi-val">${d.conversion != null ? d.conversion.toFixed(1) + '%' : '—'}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">UPT</div>
+        <div class="kpi-val">${d.upt != null ? d.upt.toFixed(2) : '—'}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="metric-label">Трафик</div>
+        <div class="kpi-val">${d.traffic != null ? d.traffic.toLocaleString('ru-RU') : '—'}</div>
+      </div>
+    </div>
+    <table class="cat-table">
+      <thead><tr><th>Категория</th><th>ТО</th><th>LFL</th></tr></thead>
+      <tbody>
+        <tr><td>Игрушки</td><td>${fmtRub(d.toys_to)}</td><td class="${lflClass(d.toys_lfl)}">${d.toys_lfl != null ? fmtPct(d.toys_lfl) : '—'}</td></tr>
+        <tr><td>Одежда</td><td>${fmtRub(d.clothes_to)}</td><td class="${lflClass(d.clothes_lfl)}">${d.clothes_lfl != null ? fmtPct(d.clothes_lfl) : '—'}</td></tr>
+        <tr><td>Обувь</td><td>${fmtRub(d.shoes_to)}</td><td class="${lflClass(d.shoes_lfl)}">${d.shoes_lfl != null ? fmtPct(d.shoes_lfl) : '—'}</td></tr>
+        <tr><td>Спорт</td><td>${fmtRub(d.sport_to)}</td><td class="${lflClass(d.sport_lfl)}">${d.sport_lfl != null ? fmtPct(d.sport_lfl) : '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
+async function loadDirSales() {
+  const el = document.getElementById('dir-sales-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const storeId = currentUser?.store_id;
+    if (!storeId) { el.innerHTML = '<div class="empty">Нет магазина</div>'; return; }
+    const d = await api(`/api/sales/store/${storeId}`);
+    el.innerHTML = renderSalesCard(d.store, `Магазин ${storeId}`) +
+                   renderSalesCard(d.division, 'Дивизион Москва 2 КК');
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function uploadSalesFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const zone = document.getElementById('sales-upload-zone');
+  zone.innerHTML = '<div class="upload-icon">⏳</div><div class="upload-text">Загрузка...</div>';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await apiUpload('/api/sales/upload', fd);
+    zone.className = 'upload-zone ok';
+    zone.innerHTML = `<div class="upload-icon">✅</div>
+      <div class="upload-text">Загружено успешно</div>
+      <div class="upload-sub">${data.rows} строк · ${data.report_date || ''}</div>`;
+    toast('Продажи загружены: ' + data.rows + ' строк');
+    loadAdminSales();
+  } catch(e) {
+    zone.className = 'upload-zone';
+    zone.innerHTML = '<div class="upload-icon">📊</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Продажи KIDS_МЕСЯЦ.xlsx</div>';
+    toast('Ошибка: ' + e.message);
+  }
+  input.value = '';
+}
+
+async function loadAdminSales() {
+  const el = document.getElementById('admin-sales-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const data = await api('/api/sales/all');
+    if (!data || !data.stores || !data.stores.length) {
+      el.innerHTML = '<div class="empty">Данных нет. Загрузите файл продаж.</div>'; return;
+    }
+    let divHtml = renderSalesCard(data.division, 'Дивизион Москва 2 КК');
+    let storesHtml = `<div class="card"><div class="card-title">Все магазины</div>
+      <table class="sales-all-table">
+        <thead><tr><th>Магазин</th><th>% плана</th><th>LFL</th><th>ТО факт</th></tr></thead>
+        <tbody>${data.stores.map(s => `<tr>
+          <td>${s.store_id}</td>
+          <td class="${s.plan_pct >= 100 ? 'lfl-pos' : s.plan_pct >= 90 ? '' : 'lfl-neg'}">${s.plan_pct != null ? s.plan_pct.toFixed(1) + '%' : '—'}</td>
+          <td class="${lflClass(s.lfl)}">${s.lfl != null ? fmtPct(s.lfl) : '—'}</td>
+          <td>${fmtRub(s.to_fact)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    el.innerHTML = divHtml + storesHtml;
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
 async function fetchFromEmail() {
   const btn = document.getElementById('email-fetch-btn');
   const st  = document.getElementById('email-fetch-status');
@@ -1288,7 +1459,7 @@ async function resetPin(id) {
 
 // ── Admin навигация ────────────────────────────────────────────────────────
 function adminTab(tab) {
-  ['summary', 'upload', 'schedule', 'users'].forEach(t => {
+  ['summary', 'sales', 'upload', 'schedule', 'users'].forEach(t => {
     document.getElementById('admin-' + t).style.display = t === tab ? 'block' : 'none';
     document.getElementById('atab-' + t).classList.toggle('active', t === tab);
   });
@@ -1296,6 +1467,7 @@ function adminTab(tab) {
   if (tab === 'users')    loadUsers();
   if (tab === 'upload')   { loadUploadLog(); loadFotLog(); }
   if (tab === 'schedule') { initSchedStores(); }
+  if (tab === 'sales')    loadAdminSales();
 }
 
 // ── График работы ───────────────────────────────────────────────────────────
