@@ -1,4 +1,4 @@
-const CACHE = 'fot-v16';
+const CACHE = 'fot-v17';
 const ASSETS = ['/', '/static/manifest.json'];
 
 self.addEventListener('install', e => {

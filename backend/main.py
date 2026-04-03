@@ -194,6 +194,37 @@ def init_db():
             UNIQUE(store_id, month, employee_name)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sales_data (
+            id SERIAL PRIMARY KEY,
+            report_date TEXT NOT NULL,
+            store_id INTEGER,
+            subdivision TEXT,
+            to_fact REAL DEFAULT 0,
+            plan_pct REAL DEFAULT 0,
+            lfl REAL DEFAULT 0,
+            margin REAL DEFAULT 0,
+            avg_ticket REAL DEFAULT 0,
+            conversion REAL DEFAULT 0,
+            upt REAL DEFAULT 0,
+            traffic INTEGER DEFAULT 0,
+            traffic_lfl REAL DEFAULT 0,
+            toys_to REAL DEFAULT 0,    toys_lfl REAL DEFAULT 0,
+            clothes_to REAL DEFAULT 0, clothes_lfl REAL DEFAULT 0,
+            shoes_to REAL DEFAULT 0,   shoes_lfl REAL DEFAULT 0,
+            sport_to REAL DEFAULT 0,   sport_lfl REAL DEFAULT 0,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sales_upload_log (
+            id SERIAL PRIMARY KEY,
+            filename TEXT,
+            report_date TEXT,
+            rows_count INTEGER,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     # Добавляем колонку first_login если нет (миграция)
     try:
@@ -998,6 +1029,260 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
     )
 
 
+# ─── Продажи ─────────────────────────────────────────────────────────────────
+DIVISION_NAME = "Москва 2 КК"
+
+def _safe_float(val, default=0.0):
+    try:
+        v = float(val)
+        return v if v == v else default  # NaN check
+    except Exception:
+        return default
+
+def _parse_sales_xlsx(content: bytes, filename: str) -> dict:
+    """Парсит файл продаж KIDS_МЕСЯЦ.xlsx. Автоопределение листа и строк данных."""
+    import re as _re
+
+    # ── 1. Читаем лист ───────────────────────────────────────────────────────
+    xl = pd.ExcelFile(io.BytesIO(content))
+    sheet_names = xl.sheet_names
+    # Ищем лист с "КИД" или "KID" в названии, иначе берём первый
+    sheet = None
+    for s in sheet_names:
+        if "КИД" in s.upper() or "KID" in s.upper():
+            sheet = s
+            break
+    if sheet is None:
+        sheet = sheet_names[0]
+    try:
+        df = pd.read_excel(io.BytesIO(content), sheet_name=sheet, header=None)
+    except Exception as e:
+        return {"ok": False, "error": f"Ошибка чтения листа '{sheet}': {e}. Листы в файле: {sheet_names}"}
+
+    # ── 2. Дата отчёта ───────────────────────────────────────────────────────
+    report_date = None
+    for ri in range(min(5, len(df))):
+        for ci in range(min(5, len(df.columns))):
+            try:
+                cell = str(df.iloc[ri, ci])
+                m = _re.search(r'(\d{2}\.\d{2}\.\d{4})', cell)
+                if m:
+                    report_date = m.group(1)
+                    break
+            except Exception:
+                pass
+        if report_date:
+            break
+    if not report_date:
+        report_date = datetime.now().strftime("%d.%m.%Y")
+
+    # ── 3. Находим строку-заголовок (ищем по ключевым словам) ───────────────
+    header_row = 1   # дефолт
+    data_start = 2
+    col_map = {}     # имя → индекс
+
+    # Ключевые слова для поиска колонок
+    COL_KEYS = {
+        "to_fact":     ["то факт", "to_fact", "продажи факт", "факт продаж"],
+        "plan_pct":    ["% план", "% выполн", "план %", "выполнение план", "% от план"],
+        "lfl":         ["lfl", "лфл", "like for like"],
+        "margin":      ["маржа", "margin", "рент"],
+        "avg_ticket":  ["средн", "avg", "чек"],
+        "conversion":  ["конверс", "conversion"],
+        "upt":         ["upt", "ед/чек", "единиц"],
+        "traffic":     ["трафик", "traffic", "посетит"],
+        "traffic_lfl": ["трафик lfl", "traffic lfl"],
+        "toys_to":     ["игрушк", "toy"],
+        "toys_lfl":    ["игрушк lfl", "toy lfl", "игрушк лфл"],
+        "clothes_to":  ["одежд", "cloth"],
+        "clothes_lfl": ["одежд lfl", "одежд лфл"],
+        "shoes_to":    ["обувь", "shoe"],
+        "shoes_lfl":   ["обувь lfl", "обувь лфл"],
+        "sport_to":    ["спорт", "sport"],
+        "sport_lfl":   ["спорт lfl", "спорт лфл"],
+    }
+
+    for ri in range(min(10, len(df))):
+        row_vals = [str(v).lower().strip() for v in df.iloc[ri]]
+        matches = 0
+        tmp_map = {}
+        for field, keys in COL_KEYS.items():
+            for ci, cell in enumerate(row_vals):
+                if any(k in cell for k in keys) and field not in tmp_map:
+                    tmp_map[field] = ci
+                    matches += 1
+                    break
+        if matches >= 4:
+            header_row = ri
+            data_start = ri + 1
+            col_map = tmp_map
+            break
+
+    # Если автоопределение не сработало — используем жёстко заданные индексы
+    if not col_map:
+        col_map = {
+            "to_fact": 4, "plan_pct": 5, "lfl": 6, "margin": 8,
+            "avg_ticket": 10, "conversion": 12, "upt": 14,
+            "traffic": 16, "traffic_lfl": 17,
+            "toys_to": 18, "toys_lfl": 19,
+            "clothes_to": 21, "clothes_lfl": 22,
+            "shoes_to": 24, "shoes_lfl": 25,
+            "sport_to": 27, "sport_lfl": 28,
+        }
+
+    def gcol(row, field, default=0.0):
+        idx = col_map.get(field)
+        if idx is None or idx >= len(row):
+            return default
+        return _safe_float(row[idx], default)
+
+    data_df = df.iloc[data_start:].reset_index(drop=True)
+
+    # ── 4. Записываем в БД ───────────────────────────────────────────────────
+    conn = get_db()
+    conn.execute("DELETE FROM sales_data WHERE report_date=%s", (report_date,))
+    conn.commit()
+
+    rows_inserted = 0
+    division_row_saved = False
+
+    for _, row in data_df.iterrows():
+        try:
+            subdivision = str(row.iloc[1] if len(row) > 1 else "").strip()
+            store_raw   = str(row.iloc[2] if len(row) > 2 else "").strip()
+        except Exception:
+            continue
+
+        if not subdivision or subdivision == "nan":
+            continue
+
+        is_division = (DIVISION_NAME in subdivision) and (
+            not store_raw or store_raw == "nan" or store_raw == subdivision
+        )
+
+        store_id = None
+        if store_raw and store_raw != "nan":
+            try:
+                store_id = int(float(store_raw))
+                if store_id not in STORE_DATA:
+                    store_id = None
+            except Exception:
+                store_id = None
+
+        if not is_division and store_id is None:
+            continue
+
+        plan_pct = gcol(row, "plan_pct")
+        # Если значение в долях (0.99), переводим в %
+        if 0 < plan_pct <= 5:
+            plan_pct = round(plan_pct * 100, 2)
+
+        lfl = gcol(row, "lfl")
+        if -5 < lfl < 5 and lfl != 0:
+            lfl = round(lfl * 100, 2)
+
+        traffic_raw = gcol(row, "traffic")
+        traffic = int(traffic_raw) if traffic_raw else 0
+
+        conn.execute("""
+            INSERT INTO sales_data
+              (report_date, store_id, subdivision, to_fact, plan_pct, lfl, margin,
+               avg_ticket, conversion, upt, traffic, traffic_lfl,
+               toys_to, toys_lfl, clothes_to, clothes_lfl,
+               shoes_to, shoes_lfl, sport_to, sport_lfl)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (report_date,
+              None if is_division else store_id,
+              DIVISION_NAME if is_division else subdivision,
+              gcol(row, "to_fact"), plan_pct, lfl, gcol(row, "margin"),
+              gcol(row, "avg_ticket"), gcol(row, "conversion"), gcol(row, "upt"),
+              traffic, gcol(row, "traffic_lfl"),
+              gcol(row, "toys_to"), gcol(row, "toys_lfl"),
+              gcol(row, "clothes_to"), gcol(row, "clothes_lfl"),
+              gcol(row, "shoes_to"), gcol(row, "shoes_lfl"),
+              gcol(row, "sport_to"), gcol(row, "sport_lfl")))
+        rows_inserted += 1
+        if is_division:
+            division_row_saved = True
+
+    conn.execute("INSERT INTO sales_upload_log (filename, report_date, rows_count) VALUES (%s,%s,%s)",
+                 (filename, report_date, rows_inserted))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "report_date": report_date, "rows": rows_inserted,
+            "division_saved": division_row_saved, "sheet": sheet, "col_map": col_map}
+
+@app.post("/api/sales/upload")
+async def upload_sales(file: UploadFile = File(...), user=Depends(require_admin)):
+    content = await file.read()
+    result = _parse_sales_xlsx(content, file.filename)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.get("/api/sales/store/{store_id}")
+def get_sales_store(store_id: int, user=Depends(require_auth)):
+    # Директор может смотреть только свой магазин
+    if user["role"] != "admin" and user.get("store_id") != store_id:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    conn = get_db()
+    # Последняя дата
+    last = conn.execute(
+        "SELECT report_date FROM sales_data ORDER BY uploaded_at DESC LIMIT 1"
+    ).fetchone()
+    if not last:
+        conn.close()
+        return {"store": None, "division": None, "report_date": None}
+    rdate = last["report_date"]
+    store = conn.execute(
+        "SELECT * FROM sales_data WHERE report_date=%s AND store_id=%s",
+        (rdate, store_id)
+    ).fetchone()
+    division = conn.execute(
+        "SELECT * FROM sales_data WHERE report_date=%s AND store_id IS NULL",
+        (rdate,)
+    ).fetchone()
+    conn.close()
+    return {
+        "report_date": rdate,
+        "store": dict(store) if store else None,
+        "division": dict(division) if division else None
+    }
+
+@app.get("/api/sales/all")
+def get_sales_all(user=Depends(require_admin)):
+    conn = get_db()
+    last = conn.execute(
+        "SELECT report_date FROM sales_data ORDER BY uploaded_at DESC LIMIT 1"
+    ).fetchone()
+    if not last:
+        conn.close()
+        return {"stores": [], "division": None, "report_date": None}
+    rdate = last["report_date"]
+    stores = conn.execute(
+        "SELECT * FROM sales_data WHERE report_date=%s AND store_id IS NOT NULL ORDER BY to_fact DESC",
+        (rdate,)
+    ).fetchall()
+    division = conn.execute(
+        "SELECT * FROM sales_data WHERE report_date=%s AND store_id IS NULL",
+        (rdate,)
+    ).fetchone()
+    conn.close()
+    return {
+        "report_date": rdate,
+        "stores": [dict(r) for r in stores],
+        "division": dict(division) if division else None
+    }
+
+@app.get("/api/sales/log")
+def sales_log(user=Depends(require_admin)):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM sales_upload_log ORDER BY uploaded_at DESC LIMIT 10"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
 # ─── Email авто-загрузка мотивации ───────────────────────────────────────────
 def _decode_filename(raw):
     parts = decode_email_header(raw)
@@ -1083,34 +1368,25 @@ def _process_motivation_bytes(content: bytes, filename: str) -> dict:
     rows_inserted = 0
     report_date = None
 
-    # Определяем store_id из первой валидной строки
-    first_store = None
-    for _, row in data_df.iterrows():
-        try:
-            sid = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
-            if sid and sid in STORE_DATA:
-                first_store = sid
-                break
-        except Exception:
-            continue
+    try:
+        # Получим все store_ids из файла для удаления дублей (без дубля первого DELETE)
+        store_ids_in_file = set()
+        for _, row in data_df.iterrows():
+            try:
+                sid = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
+                if sid:
+                    store_ids_in_file.add(sid)
+            except Exception:
+                continue
 
-    if first_store:
-        conn.execute("DELETE FROM motivation_data WHERE store_id IN (SELECT DISTINCT store_id FROM motivation_data WHERE store_id = ?)", (first_store,))
-
-    # Получим все store_ids из файла для удаления дублей
-    store_ids_in_file = set()
-    for _, row in data_df.iterrows():
-        try:
-            sid = int(float(str(row[2]))) if str(row[2]) not in ["nan", ""] else None
-            if sid:
-                store_ids_in_file.add(sid)
-        except Exception:
-            continue
-
-    if store_ids_in_file:
-        placeholders = ",".join(["%s"] * len(store_ids_in_file))
-        conn.execute(f"DELETE FROM motivation_data WHERE store_id IN ({placeholders})", tuple(store_ids_in_file))
-        conn.commit()
+        if store_ids_in_file:
+            placeholders = ",".join(["%s"] * len(store_ids_in_file))
+            conn.execute(f"DELETE FROM motivation_data WHERE store_id IN ({placeholders})", tuple(store_ids_in_file))
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return {"ok": False, "error": f"Ошибка очистки старых данных: {e}"}
 
     for _, row in data_df.iterrows():
         try:
@@ -1140,12 +1416,17 @@ def _process_motivation_bytes(content: bytes, filename: str) -> dict:
             """, (store_id, rd, login, role, name, to_fact, pct_to, income, fdm_val, is_total, is_bezshk))
             rows_inserted += 1
         except Exception:
+            conn.rollback()  # сбрасываем ошибку транзакции PostgreSQL перед следующей строкой
             continue
 
-    conn.execute("INSERT INTO upload_log (filename, report_date, rows_count) VALUES (%s,%s,%s)",
-                 (filename, report_date, rows_inserted))
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute("INSERT INTO upload_log (filename, report_date, rows_count) VALUES (%s,%s,%s)",
+                     (filename, report_date, rows_inserted))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        conn.close()
     return {"ok": True, "filename": filename, "rows": rows_inserted, "report_date": report_date}
 
 
@@ -1166,12 +1447,16 @@ def email_status(user=Depends(require_admin)):
         "user": EMAIL_USER or "не задан",
         "sender_filter": EMAIL_SENDER,
         "subject_filter": EMAIL_SUBJECT,
-        "schedule": f"ежедневно в {EMAIL_HOUR:02d}:{EMAIL_MINUTE:02d}"
+        "schedule": f"ежедневно в {EMAIL_HOUR:02d}:{EMAIL_MINUTE:02d}",
+        "last_run": _last_email_fetch_result
     }
 
 # ─── Планировщик (встроенный threading, без внешних зависимостей) ─────────────
+_last_email_fetch_result: dict = {"status": "never", "time": None, "error": None, "rows": None}
+
 def _email_scheduler_loop():
     """Фоновый поток: проверяет время и запускает загрузку раз в день."""
+    global _last_email_fetch_result
     last_run_date = None
     while True:
         try:
@@ -1179,8 +1464,18 @@ def _email_scheduler_loop():
             if now.hour == EMAIL_HOUR and now.minute == EMAIL_MINUTE and now.date() != last_run_date:
                 last_run_date = now.date()
                 result = fetch_motivation_from_email()
+                _last_email_fetch_result = {
+                    "status": "ok" if result.get("ok") else "error",
+                    "time": now.strftime("%d.%m.%Y %H:%M"),
+                    "error": result.get("error"),
+                    "rows": result.get("rows"),
+                    "filename": result.get("filename"),
+                }
                 print(f"[Email Auto-Fetch] {now.isoformat()} → {result}")
         except Exception as e:
+            _last_email_fetch_result = {
+                "status": "error", "time": None, "error": str(e), "rows": None, "filename": None
+            }
             print(f"[Email Auto-Fetch] Ошибка планировщика: {e}")
         time.sleep(30)  # Проверяем каждые 30 секунд
 

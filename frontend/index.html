@@ -578,7 +578,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
       </div>
       <div class="card">
         <div class="card-title">📧 Загрузка из почты</div>
-        <div style="font-size:13px;color:#666;margin-bottom:10px">Автозагрузка работает ежедневно в 09:00. Можно запустить вручную:</div>
+        <div id="email-status-block" style="margin-bottom:10px;font-size:13px;color:#666">
+          <div class="loading" style="padding:8px 0">Проверка настроек почты...</div>
+        </div>
         <button class="btn btn-primary" id="email-fetch-btn" onclick="fetchFromEmail()">📧 Загрузить из почты сейчас</button>
         <div id="email-fetch-status" style="margin-top:8px;font-size:13px;color:#444"></div>
       </div>
@@ -1351,6 +1353,33 @@ async function loadSalesLog() {
   } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
 }
 
+async function loadEmailStatus() {
+  const el = document.getElementById('email-status-block');
+  if (!el) return;
+  try {
+    const s = await api('/api/email/status');
+    const configHtml = s.configured
+      ? `<span style="color:var(--green);font-weight:600">✅ Настроено</span> · ${s.user}`
+      : `<span style="color:var(--red);font-weight:600">⚠️ Не настроено</span> — добавьте EMAIL_USER и EMAIL_PASSWORD в Railway Variables`;
+    let lastRunHtml = '';
+    const lr = s.last_run;
+    if (lr && lr.status !== 'never') {
+      if (lr.status === 'ok') {
+        lastRunHtml = `<div style="margin-top:5px;color:var(--green)">Последняя загрузка: ${lr.time} — ${lr.rows} строк (${lr.filename || ''})</div>`;
+      } else {
+        lastRunHtml = `<div style="margin-top:5px;color:var(--red)">Последняя попытка: ${lr.time || '—'} — Ошибка: ${lr.error || '—'}</div>`;
+      }
+    } else {
+      lastRunHtml = `<div style="margin-top:5px;color:var(--gray)">Авто-загрузка ещё не запускалась с момента последнего старта сервера</div>`;
+    }
+    el.innerHTML = `<div>${configHtml}</div>
+      <div style="margin-top:3px;color:#666">Расписание: ${s.schedule} · Отправитель: ${s.sender_filter} · Тема: «${s.subject_filter}»</div>
+      ${lastRunHtml}`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--gray)">Не удалось получить статус почты</div>`;
+  }
+}
+
 async function fetchFromEmail() {
   const btn = document.getElementById('email-fetch-btn');
   const st  = document.getElementById('email-fetch-status');
@@ -1485,7 +1514,7 @@ function adminTab(tab) {
   });
   if (tab === 'summary')  loadSummary();
   if (tab === 'users')    loadUsers();
-  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); loadSalesLog(); }
+  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); loadSalesLog(); loadEmailStatus(); }
   if (tab === 'schedule') { initSchedStores(); }
   if (tab === 'sales')    loadAdminSales();
 }
