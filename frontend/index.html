@@ -234,6 +234,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .sales-all-table th { background:#f8cdd9;padding:6px 4px;text-align:center;font-size:11px;font-weight:600; }
 .sales-all-table td { padding:5px 4px;border-bottom:1px solid #f0f0f0;text-align:center; }
 .sales-all-table td:first-child { text-align:left;font-weight:500; }
+/* ── Sub-nav внутри вкладок ── */
+.sub-nav { display:flex;gap:4px;margin-bottom:10px;overflow-x:auto; }
+.sub-nav button { padding:6px 12px;border:1px solid var(--border);border-radius:20px;background:#fff;
+  font-size:12px;font-weight:500;color:#555;cursor:pointer;white-space:nowrap; }
+.sub-nav button.active { background:var(--blue-light);color:var(--blue);border-color:var(--blue);font-weight:600; }
+/* ── LFL категории таблица ── */
+.lfl-cat-table { width:100%;border-collapse:collapse;font-size:12px; }
+.lfl-cat-table th { background:#f8cdd9;padding:6px 4px;text-align:center;font-size:11px;font-weight:600; }
+.lfl-cat-table th:first-child { text-align:left;padding-left:8px; }
+.lfl-cat-table td { padding:5px 4px;border-bottom:1px solid #f0f0f0;text-align:center; }
+.lfl-cat-table td:first-child { text-align:left;padding-left:8px;font-weight:500; }
+/* ── Остатки таблица ── */
+.stock-table { width:100%;border-collapse:collapse;font-size:12px; }
+.stock-table th { background:#f8cdd9;padding:6px 4px;text-align:center;font-size:11px;font-weight:600; }
+.stock-table th:first-child { text-align:left;padding-left:8px; }
+.stock-table td { padding:5px 4px;border-bottom:1px solid #f0f0f0;text-align:center; }
+.stock-table td:first-child { text-align:left;padding-left:8px;font-weight:500; }
+.stock-val { font-weight:600;color:var(--blue-dark); }
 
 /* ── Попап редактирования ячейки ── */
 .cell-popup { position: absolute; z-index: 500; background: #fff; border: 1.5px solid var(--blue);
@@ -486,7 +504,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 
     <!-- Продажи (директор) -->
     <div id="dir-sales" style="display:none">
-      <div id="dir-sales-content"><div class="loading">Загрузка...</div></div>
+      <div class="sub-nav">
+        <button id="dstab-overview" class="active" onclick="dirSalesTab('overview')">Обзор</button>
+        <button id="dstab-lfl" onclick="dirSalesTab('lfl')">LFL Категории</button>
+        <button id="dstab-stock" onclick="dirSalesTab('stock')">Остатки</button>
+      </div>
+      <div id="dir-sales-overview"><div id="dir-sales-content"><div class="loading">Загрузка...</div></div></div>
+      <div id="dir-sales-lfl" style="display:none"><div id="dir-lfl-content"><div class="loading">Загрузка...</div></div></div>
+      <div id="dir-sales-stock" style="display:none"><div id="dir-stock-content"><div class="loading">Загрузка...</div></div></div>
     </div>
 
     <!-- График -->
@@ -561,7 +586,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 
     <!-- Продажи (админ) -->
     <div id="admin-sales" style="display:none">
-      <div id="admin-sales-content"><div class="loading">Загрузка...</div></div>
+      <div class="sub-nav">
+        <button id="astab-overview" class="active" onclick="adminSalesTab('overview')">Обзор</button>
+        <button id="astab-lfl" onclick="adminSalesTab('lfl')">LFL Категории</button>
+        <button id="astab-stock" onclick="adminSalesTab('stock')">Остатки</button>
+      </div>
+      <div id="admin-sales-overview"><div id="admin-sales-content"><div class="loading">Загрузка...</div></div></div>
+      <div id="admin-sales-lfl" style="display:none"><div id="admin-lfl-content"><div class="loading">Загрузка...</div></div></div>
+      <div id="admin-sales-stock" style="display:none"><div id="admin-stock-content"><div class="loading">Загрузка...</div></div></div>
     </div>
 
     <!-- Загрузка файла -->
@@ -620,6 +652,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
       <div class="card">
         <div class="card-title">История загрузок продаж</div>
         <div id="sales-upload-log"><div class="loading">...</div></div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-title">📦 Загрузка файла остатков</div>
+        <div class="upload-zone" id="stock-upload-zone" onclick="document.getElementById('stock-xlsx-input').click()">
+          <div class="upload-icon">📦</div>
+          <div class="upload-text">Нажмите для выбора файла</div>
+          <div class="upload-sub">Остатки по категориям .xlsx</div>
+        </div>
+        <input type="file" id="stock-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="uploadStockFile(this)">
+      </div>
+      <div class="card">
+        <div class="card-title">История загрузок остатков</div>
+        <div id="stock-upload-log"><div class="loading">...</div></div>
       </div>
     </div>
 
@@ -976,7 +1022,7 @@ function dirTab(tab) {
     document.getElementById('dtab-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'schedule') initDirSchedMonth();
-  if (tab === 'sales')    loadDirSales();
+  if (tab === 'sales')    { dirSalesTab('overview'); loadDirSales(); }
 }
 
 function initDirSchedMonth() {
@@ -1212,7 +1258,7 @@ async function uploadFile(input) {
 
 // ── Продажи: вспомогательные ────────────────────────────────────────────────
 function fmtRub(v) {
-  if (v == null || isNaN(v)) return '—';
+  if (!v || isNaN(v)) return '—';
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v);
 }
 function fmtPct(v) {
@@ -1223,12 +1269,20 @@ function lflClass(v) {
   if (v == null || isNaN(v)) return '';
   return v >= 0 ? 'lfl-pos' : 'lfl-neg';
 }
+function fmtPlanPct(v) {
+  if (!v) return '—';
+  return v.toFixed(1) + '%';
+}
+function planPctClass(v) {
+  if (!v) return '';
+  return v >= 100 ? 'lfl-pos' : v >= 90 ? '' : 'lfl-neg';
+}
 
 function renderSalesCard(d, title) {
   if (!d) return '<div class="empty">Нет данных</div>';
-  const planPct = d.plan_pct != null ? d.plan_pct.toFixed(1) + '%' : '—';
+  const planPct = fmtPlanPct(d.plan_pct);
   const planCls = d.plan_pct >= 100 ? 'ok' : d.plan_pct >= 90 ? 'warn' : 'err';
-  const lfl     = d.lfl != null ? fmtPct(d.lfl) : '—';
+  const lfl     = d.lfl ? fmtPct(d.lfl) : '—';
   const lflCls  = lflClass(d.lfl);
   return `
   <div class="card">
@@ -1249,7 +1303,7 @@ function renderSalesCard(d, title) {
       </div>
       <div class="kpi-card">
         <div class="metric-label">Маржа</div>
-        <div class="kpi-val">${d.margin != null ? d.margin.toFixed(1) + '%' : '—'}</div>
+        <div class="kpi-val">${d.margin ? d.margin.toFixed(1) + '%' : '—'}</div>
       </div>
       <div class="kpi-card">
         <div class="metric-label">Средний чек</div>
@@ -1257,27 +1311,46 @@ function renderSalesCard(d, title) {
       </div>
       <div class="kpi-card">
         <div class="metric-label">Конверсия</div>
-        <div class="kpi-val">${d.conversion != null ? d.conversion.toFixed(1) + '%' : '—'}</div>
+        <div class="kpi-val">${d.conversion ? d.conversion.toFixed(1) + '%' : '—'}</div>
       </div>
       <div class="kpi-card">
         <div class="metric-label">UPT</div>
-        <div class="kpi-val">${d.upt != null ? d.upt.toFixed(2) : '—'}</div>
+        <div class="kpi-val">${d.upt ? d.upt.toFixed(2) : '—'}</div>
       </div>
       <div class="kpi-card">
         <div class="metric-label">Трафик</div>
-        <div class="kpi-val">${d.traffic != null ? d.traffic.toLocaleString('ru-RU') : '—'}</div>
+        <div class="kpi-val">${d.traffic ? d.traffic.toLocaleString('ru-RU') : '—'}</div>
       </div>
     </div>
     <table class="cat-table">
-      <thead><tr><th>Категория</th><th>ТО</th><th>LFL</th></tr></thead>
+      <thead><tr><th>Категория</th><th>ТО факт</th><th>LFL</th></tr></thead>
       <tbody>
-        <tr><td>Игрушки</td><td>${fmtRub(d.toys_to)}</td><td class="${lflClass(d.toys_lfl)}">${d.toys_lfl != null ? fmtPct(d.toys_lfl) : '—'}</td></tr>
-        <tr><td>Одежда</td><td>${fmtRub(d.clothes_to)}</td><td class="${lflClass(d.clothes_lfl)}">${d.clothes_lfl != null ? fmtPct(d.clothes_lfl) : '—'}</td></tr>
-        <tr><td>Обувь</td><td>${fmtRub(d.shoes_to)}</td><td class="${lflClass(d.shoes_lfl)}">${d.shoes_lfl != null ? fmtPct(d.shoes_lfl) : '—'}</td></tr>
-        <tr><td>Спорт</td><td>${fmtRub(d.sport_to)}</td><td class="${lflClass(d.sport_lfl)}">${d.sport_lfl != null ? fmtPct(d.sport_lfl) : '—'}</td></tr>
+        <tr><td>Игрушки</td><td>${fmtRub(d.toys_to)}</td><td class="${lflClass(d.toys_lfl)}">${d.toys_lfl ? fmtPct(d.toys_lfl) : '—'}</td></tr>
+        <tr><td>Одежда</td><td>${fmtRub(d.clothes_to)}</td><td class="${lflClass(d.clothes_lfl)}">${d.clothes_lfl ? fmtPct(d.clothes_lfl) : '—'}</td></tr>
+        <tr><td>Обувь</td><td>${fmtRub(d.shoes_to)}</td><td class="${lflClass(d.shoes_lfl)}">${d.shoes_lfl ? fmtPct(d.shoes_lfl) : '—'}</td></tr>
+        <tr><td>Спорт</td><td>${fmtRub(d.sport_to)}</td><td class="${lflClass(d.sport_lfl)}">${d.sport_lfl ? fmtPct(d.sport_lfl) : '—'}</td></tr>
       </tbody>
     </table>
   </div>`;
+}
+
+// ── Sub-tab навигация продаж ───────────────────────────────────────────────
+function dirSalesTab(tab) {
+  ['overview','lfl','stock'].forEach(t => {
+    document.getElementById('dir-sales-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('dstab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'lfl')   loadDirLfl();
+  if (tab === 'stock') loadDirStock();
+}
+
+function adminSalesTab(tab) {
+  ['overview','lfl','stock'].forEach(t => {
+    document.getElementById('admin-sales-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('astab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'lfl')   loadAdminLfl();
+  if (tab === 'stock') loadAdminStock();
 }
 
 async function loadDirSales() {
@@ -1290,6 +1363,141 @@ async function loadDirSales() {
     el.innerHTML = renderSalesCard(d.store, `Магазин ${storeId}`) +
                    renderSalesCard(d.division, 'Дивизион Москва 2 КК');
   } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+// ── LFL по категориям ─────────────────────────────────────────────────────
+async function loadDirLfl() {
+  const el = document.getElementById('dir-lfl-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const storeId = currentUser?.store_id;
+    if (!storeId) { el.innerHTML = '<div class="empty">Нет магазина</div>'; return; }
+    const d = await api(`/api/sales/store/${storeId}`);
+    el.innerHTML = renderLflCard(d.store, `Магазин ${storeId}`) +
+                   renderLflCard(d.division, 'Дивизион Москва 2 КК');
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function loadAdminLfl() {
+  const el = document.getElementById('admin-lfl-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const data = await api('/api/sales/all');
+    if (!data || !data.stores || !data.stores.length) {
+      el.innerHTML = '<div class="empty">Данных нет. Загрузите файл продаж.</div>'; return;
+    }
+    let divHtml = renderLflCard(data.division, 'Дивизион Москва 2 КК');
+    let storesHtml = `<div class="card"><div class="card-title">LFL по категориям — все магазины</div>
+      <div class="sales-date">${data.report_date || ''}</div>
+      <div style="overflow-x:auto">
+      <table class="lfl-cat-table">
+        <thead><tr><th>Магазин</th><th>Итого</th><th>Одежда</th><th>Игрушки</th><th>Обувь</th><th>Спорт</th></tr></thead>
+        <tbody>${data.stores.map(s => `<tr>
+          <td>${s.store_id}</td>
+          <td class="${lflClass(s.lfl)}">${s.lfl ? fmtPct(s.lfl) : '—'}</td>
+          <td class="${lflClass(s.clothes_lfl)}">${s.clothes_lfl ? fmtPct(s.clothes_lfl) : '—'}</td>
+          <td class="${lflClass(s.toys_lfl)}">${s.toys_lfl ? fmtPct(s.toys_lfl) : '—'}</td>
+          <td class="${lflClass(s.shoes_lfl)}">${s.shoes_lfl ? fmtPct(s.shoes_lfl) : '—'}</td>
+          <td class="${lflClass(s.sport_lfl)}">${s.sport_lfl ? fmtPct(s.sport_lfl) : '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+    el.innerHTML = divHtml + storesHtml;
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+function renderLflCard(d, title) {
+  if (!d) return '<div class="empty">Нет данных</div>';
+  const CATS = [
+    { label: 'Одежда',   to: d.clothes_to, lfl: d.clothes_lfl },
+    { label: 'Игрушки',  to: d.toys_to,    lfl: d.toys_lfl    },
+    { label: 'Обувь',    to: d.shoes_to,   lfl: d.shoes_lfl   },
+    { label: 'Спорт',    to: d.sport_to,   lfl: d.sport_lfl   },
+  ];
+  return `<div class="card">
+    <div class="card-title">${title} — LFL по категориям</div>
+    <div class="sales-date">${d.report_date || ''}</div>
+    <table class="lfl-cat-table">
+      <thead><tr><th>Категория</th><th>ТО факт</th><th>LFL</th></tr></thead>
+      <tbody>${CATS.map(c => `<tr>
+        <td>${c.label}</td>
+        <td>${fmtRub(c.to)}</td>
+        <td class="${lflClass(c.lfl)}">${c.lfl ? fmtPct(c.lfl) : '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div style="margin-top:10px;padding:8px;background:var(--gray-light);border-radius:8px;font-size:13px">
+      <span style="font-weight:600">Итого LFL: </span>
+      <span class="${lflClass(d.lfl)}">${d.lfl ? fmtPct(d.lfl) : '—'}</span>
+    </div>
+  </div>`;
+}
+
+// ── Остатки ───────────────────────────────────────────────────────────────
+async function loadDirStock() {
+  const el = document.getElementById('dir-stock-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const storeId = currentUser?.store_id;
+    if (!storeId) { el.innerHTML = '<div class="empty">Нет магазина</div>'; return; }
+    const d = await api(`/api/stock/store/${storeId}`);
+    el.innerHTML = renderStockCard(d.store, `Магазин ${storeId}`) +
+                   renderStockCard(d.division, 'Дивизион Москва 2 КК');
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function loadAdminStock() {
+  const el = document.getElementById('admin-stock-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const data = await api('/api/stock/all');
+    if (!data || !data.stores || !data.stores.length) {
+      el.innerHTML = '<div class="empty">Данных нет. Загрузите файл остатков на вкладке «Загрузка».</div>'; return;
+    }
+    let divHtml = renderStockCard(data.division, 'Дивизион Москва 2 КК');
+    let storesHtml = `<div class="card"><div class="card-title">Остатки — все магазины</div>
+      <div class="sales-date">${data.report_date || ''}</div>
+      <div style="overflow-x:auto">
+      <table class="stock-table">
+        <thead><tr><th>Магазин</th><th>Итого</th><th>LFL</th><th>Одежда</th><th>Игрушки</th><th>Обувь</th><th>Спорт</th></tr></thead>
+        <tbody>${data.stores.map(s => `<tr>
+          <td>${s.store_id}</td>
+          <td class="stock-val">${fmtRub(s.total_stock)}</td>
+          <td class="${lflClass(s.total_lfl)}">${s.total_lfl ? fmtPct(s.total_lfl) : '—'}</td>
+          <td>${fmtRub(s.clothes_stock)}</td>
+          <td>${fmtRub(s.toys_stock)}</td>
+          <td>${fmtRub(s.shoes_stock)}</td>
+          <td>${fmtRub(s.sport_stock)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+    el.innerHTML = divHtml + storesHtml;
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+function renderStockCard(d, title) {
+  if (!d) return '<div class="empty">Нет данных</div>';
+  const CATS = [
+    { label: 'Одежда',  stock: d.clothes_stock, lfl: d.clothes_lfl },
+    { label: 'Игрушки', stock: d.toys_stock,    lfl: d.toys_lfl    },
+    { label: 'Обувь',   stock: d.shoes_stock,   lfl: d.shoes_lfl   },
+    { label: 'Спорт',   stock: d.sport_stock,   lfl: d.sport_lfl   },
+  ];
+  return `<div class="card">
+    <div class="card-title">${title} — Остатки</div>
+    <div class="sales-date">${d.report_date || ''}</div>
+    <div style="padding:10px;background:var(--gray-light);border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:11px;color:var(--gray);text-transform:uppercase">Итого остатки</div>
+        <div class="stock-val" style="font-size:22px">${fmtRub(d.total_stock)}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:var(--gray);text-transform:uppercase">LFL остатки</div>
+        <div class="${lflClass(d.total_lfl)}" style="font-size:18px;font-weight:700">${d.total_lfl ? fmtPct(d.total_lfl) : '—'}</div></div>
+    </div>
+    <table class="stock-table">
+      <thead><tr><th>Категория</th><th>Остаток</th><th>LFL</th></tr></thead>
+      <tbody>${CATS.map(c => `<tr>
+        <td>${c.label}</td>
+        <td class="stock-val">${fmtRub(c.stock)}</td>
+        <td class="${lflClass(c.lfl)}">${c.lfl ? fmtPct(c.lfl) : '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
 }
 
 async function uploadSalesFile(input) {
@@ -1316,6 +1524,29 @@ async function uploadSalesFile(input) {
   input.value = '';
 }
 
+async function uploadStockFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const zone = document.getElementById('stock-upload-zone');
+  zone.innerHTML = '<div class="upload-icon">⏳</div><div class="upload-text">Загрузка...</div>';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await apiUpload('/api/stock/upload', fd);
+    zone.className = 'upload-zone ok';
+    zone.innerHTML = `<div class="upload-icon">✅</div>
+      <div class="upload-text">Загружено успешно</div>
+      <div class="upload-sub">${data.rows} строк · ${data.report_date || ''}</div>`;
+    toast('Остатки загружены: ' + data.rows + ' строк');
+    loadStockLog();
+  } catch(e) {
+    zone.className = 'upload-zone';
+    zone.innerHTML = '<div class="upload-icon">📦</div><div class="upload-text">Нажмите для выбора файла</div><div class="upload-sub">Остатки по категориям .xlsx</div>';
+    toast('Ошибка: ' + e.message);
+  }
+  input.value = '';
+}
+
 async function loadAdminSales() {
   const el = document.getElementById('admin-sales-content');
   el.innerHTML = '<div class="loading">Загрузка...</div>';
@@ -1326,12 +1557,13 @@ async function loadAdminSales() {
     }
     let divHtml = renderSalesCard(data.division, 'Дивизион Москва 2 КК');
     let storesHtml = `<div class="card"><div class="card-title">Все магазины</div>
+      <div class="sales-date">${data.report_date || ''}</div>
       <table class="sales-all-table">
         <thead><tr><th>Магазин</th><th>% плана</th><th>LFL</th><th>ТО факт</th></tr></thead>
         <tbody>${data.stores.map(s => `<tr>
           <td>${s.store_id}</td>
-          <td class="${s.plan_pct >= 100 ? 'lfl-pos' : s.plan_pct >= 90 ? '' : 'lfl-neg'}">${s.plan_pct != null ? s.plan_pct.toFixed(1) + '%' : '—'}</td>
-          <td class="${lflClass(s.lfl)}">${s.lfl != null ? fmtPct(s.lfl) : '—'}</td>
+          <td class="${planPctClass(s.plan_pct)}">${fmtPlanPct(s.plan_pct)}</td>
+          <td class="${lflClass(s.lfl)}">${s.lfl ? fmtPct(s.lfl) : '—'}</td>
           <td>${fmtRub(s.to_fact)}</td>
         </tr>`).join('')}</tbody>
       </table></div>`;
@@ -1344,6 +1576,20 @@ async function loadSalesLog() {
   if (!el) return;
   try {
     const logs = await api('/api/sales/log');
+    if (!logs.length) { el.innerHTML = '<div class="empty">Загрузок ещё не было</div>'; return; }
+    el.innerHTML = logs.map(l => `<div class="log-item">
+      <div><div class="log-date">${l.report_date || '—'}</div><div class="log-meta">${l.filename}</div></div>
+      <div style="text-align:right"><div class="log-date">${l.rows_count} строк</div>
+      <div class="log-meta">${(l.uploaded_at || '').split('T')[0]}</div></div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
+}
+
+async function loadStockLog() {
+  const el = document.getElementById('stock-upload-log');
+  if (!el) return;
+  try {
+    const logs = await api('/api/stock/log');
     if (!logs.length) { el.innerHTML = '<div class="empty">Загрузок ещё не было</div>'; return; }
     el.innerHTML = logs.map(l => `<div class="log-item">
       <div><div class="log-date">${l.report_date || '—'}</div><div class="log-meta">${l.filename}</div></div>
@@ -1514,9 +1760,9 @@ function adminTab(tab) {
   });
   if (tab === 'summary')  loadSummary();
   if (tab === 'users')    loadUsers();
-  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); loadSalesLog(); loadEmailStatus(); }
+  if (tab === 'upload')   { loadUploadLog(); loadFotLog(); loadSalesLog(); loadStockLog(); loadEmailStatus(); }
   if (tab === 'schedule') { initSchedStores(); }
-  if (tab === 'sales')    loadAdminSales();
+  if (tab === 'sales')    { adminSalesTab('overview'); loadAdminSales(); }
 }
 
 // ── График работы ───────────────────────────────────────────────────────────

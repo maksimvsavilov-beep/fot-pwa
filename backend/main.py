@@ -225,6 +225,34 @@ def init_db():
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS stock_data (
+            id SERIAL PRIMARY KEY,
+            report_date TEXT NOT NULL,
+            store_id INTEGER,
+            subdivision TEXT,
+            total_stock REAL DEFAULT 0,
+            total_lfl REAL DEFAULT 0,
+            clothes_stock REAL DEFAULT 0,
+            clothes_lfl REAL DEFAULT 0,
+            toys_stock REAL DEFAULT 0,
+            toys_lfl REAL DEFAULT 0,
+            shoes_stock REAL DEFAULT 0,
+            shoes_lfl REAL DEFAULT 0,
+            sport_stock REAL DEFAULT 0,
+            sport_lfl REAL DEFAULT 0,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS stock_upload_log (
+            id SERIAL PRIMARY KEY,
+            filename TEXT,
+            report_date TEXT,
+            rows_count INTEGER,
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     # Добавляем колонку first_login если нет (миграция)
     try:
@@ -1083,23 +1111,27 @@ def _parse_sales_xlsx(content: bytes, filename: str) -> dict:
 
     # Ключевые слова для поиска колонок
     COL_KEYS = {
-        "to_fact":     ["то факт", "to_fact", "продажи факт", "факт продаж"],
-        "plan_pct":    ["% план", "% выполн", "план %", "выполнение план", "% от план"],
-        "lfl":         ["lfl", "лфл", "like for like"],
-        "margin":      ["маржа", "margin", "рент"],
-        "avg_ticket":  ["средн", "avg", "чек"],
-        "conversion":  ["конверс", "conversion"],
-        "upt":         ["upt", "ед/чек", "единиц"],
-        "traffic":     ["трафик", "traffic", "посетит"],
-        "traffic_lfl": ["трафик lfl", "traffic lfl"],
-        "toys_to":     ["игрушк", "toy"],
-        "toys_lfl":    ["игрушк lfl", "toy lfl", "игрушк лфл"],
-        "clothes_to":  ["одежд", "cloth"],
-        "clothes_lfl": ["одежд lfl", "одежд лфл"],
-        "shoes_to":    ["обувь", "shoe"],
-        "shoes_lfl":   ["обувь lfl", "обувь лфл"],
-        "sport_to":    ["спорт", "sport"],
-        "sport_lfl":   ["спорт lfl", "спорт лфл"],
+        "to_fact":     ["то факт", "to_fact", "продажи факт", "факт продаж", "оборот факт",
+                        "товарооборот факт", "тов.об.факт", "розн.оборот", "выручка факт",
+                        "факт тo", "факт то", "объем продаж"],
+        "plan_pct":    ["% план", "% выполн", "план %", "выполнение план", "% от план",
+                        "исп.план", "% исп", "вып.план", "выполн.%", "исполн.план",
+                        "% вып", "% выполнения", "план выполн"],
+        "lfl":         ["lfl", "лфл", "like for like", "l-f-l", "лайк фор лайк"],
+        "margin":      ["маржа", "margin", "рент", "мд%", "мд %"],
+        "avg_ticket":  ["средн", "avg", "средний чек", "ср.чек", "ср чек"],
+        "conversion":  ["конверс", "conversion", "конв."],
+        "upt":         ["upt", "ед/чек", "единиц", "ед. на чек"],
+        "traffic":     ["трафик", "traffic", "посетит", "кол-во чеков", "количество чеков"],
+        "traffic_lfl": ["трафик lfl", "traffic lfl", "трафик лфл"],
+        "toys_to":     ["игрушк", "toy", "игр.то", "игр то"],
+        "toys_lfl":    ["игрушк lfl", "toy lfl", "игрушк лфл", "игр.lfl", "игр.лфл"],
+        "clothes_to":  ["одежд", "cloth", "одеж.то", "одеж то"],
+        "clothes_lfl": ["одежд lfl", "одежд лфл", "одеж.lfl", "одеж.лфл"],
+        "shoes_to":    ["обувь", "shoe", "обув.то", "обув то"],
+        "shoes_lfl":   ["обувь lfl", "обувь лфл", "обув.lfl", "обув.лфл"],
+        "sport_to":    ["спорт", "sport", "спорт.то", "спорт то"],
+        "sport_lfl":   ["спорт lfl", "спорт лфл", "спорт.lfl", "спорт.лфл"],
     }
 
     for ri in range(min(10, len(df))):
@@ -1173,13 +1205,24 @@ def _parse_sales_xlsx(content: bytes, filename: str) -> dict:
             continue
 
         plan_pct = gcol(row, "plan_pct")
-        # Если значение в долях (0.99), переводим в %
+        # Если значение в долях (0.9542 → 95.42%)
         if 0 < plan_pct <= 5:
             plan_pct = round(plan_pct * 100, 2)
+        # Если > 200, скорее всего промиле или ошибка — обнуляем
+        if plan_pct > 200:
+            plan_pct = 0.0
 
-        lfl = gcol(row, "lfl")
-        if -5 < lfl < 5 and lfl != 0:
-            lfl = round(lfl * 100, 2)
+        def norm_lfl(v):
+            if -5 < v < 5 and v != 0:
+                return round(v * 100, 2)
+            return round(v, 2)
+
+        lfl = norm_lfl(gcol(row, "lfl"))
+        toys_lfl    = norm_lfl(gcol(row, "toys_lfl"))
+        clothes_lfl = norm_lfl(gcol(row, "clothes_lfl"))
+        shoes_lfl   = norm_lfl(gcol(row, "shoes_lfl"))
+        sport_lfl   = norm_lfl(gcol(row, "sport_lfl"))
+        traffic_lfl = norm_lfl(gcol(row, "traffic_lfl"))
 
         traffic_raw = gcol(row, "traffic")
         traffic = int(traffic_raw) if traffic_raw else 0
@@ -1196,11 +1239,11 @@ def _parse_sales_xlsx(content: bytes, filename: str) -> dict:
               DIVISION_NAME if is_division else subdivision,
               gcol(row, "to_fact"), plan_pct, lfl, gcol(row, "margin"),
               gcol(row, "avg_ticket"), gcol(row, "conversion"), gcol(row, "upt"),
-              traffic, gcol(row, "traffic_lfl"),
-              gcol(row, "toys_to"), gcol(row, "toys_lfl"),
-              gcol(row, "clothes_to"), gcol(row, "clothes_lfl"),
-              gcol(row, "shoes_to"), gcol(row, "shoes_lfl"),
-              gcol(row, "sport_to"), gcol(row, "sport_lfl")))
+              traffic, traffic_lfl,
+              gcol(row, "toys_to"), toys_lfl,
+              gcol(row, "clothes_to"), clothes_lfl,
+              gcol(row, "shoes_to"), shoes_lfl,
+              gcol(row, "sport_to"), sport_lfl))
         rows_inserted += 1
         if is_division:
             division_row_saved = True
@@ -1279,6 +1322,214 @@ def sales_log(user=Depends(require_admin)):
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM sales_upload_log ORDER BY uploaded_at DESC LIMIT 10"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+# ─── Остатки (Stock) ──────────────────────────────────────────────────────────
+
+def _parse_stock_xlsx(content: bytes, filename: str) -> dict:
+    import re as _re
+    xl = pd.ExcelFile(io.BytesIO(content))
+    sheet_names = xl.sheet_names
+    sheet = None
+    for s in sheet_names:
+        if any(k in s.upper() for k in ["КИД", "KID", "ОСТАТ", "STOCK", "ЗАПАС"]):
+            sheet = s
+            break
+    if sheet is None:
+        sheet = sheet_names[0]
+    try:
+        df = pd.read_excel(io.BytesIO(content), sheet_name=sheet, header=None)
+    except Exception as e:
+        return {"ok": False, "error": f"Ошибка чтения листа '{sheet}': {e}"}
+
+    report_date = None
+    for ri in range(min(5, len(df))):
+        for ci in range(min(5, len(df.columns))):
+            try:
+                cell = str(df.iloc[ri, ci])
+                m = _re.search(r'(\d{2}\.\d{2}\.\d{4})', cell)
+                if m:
+                    report_date = m.group(1)
+                    break
+            except Exception:
+                pass
+        if report_date:
+            break
+    if not report_date:
+        report_date = datetime.now().strftime("%d.%m.%Y")
+
+    STOCK_KEYS = {
+        "total_stock":   ["итого", "всего", "total", "общий", "остат.итог", "остатки итого", "сумма остат"],
+        "total_lfl":     ["итого lfl", "всего lfl", "total lfl", "итого лфл"],
+        "clothes_stock": ["одежд", "cloth"],
+        "clothes_lfl":   ["одежд lfl", "одежд лфл", "одеж.lfl"],
+        "toys_stock":    ["игрушк", "toy", "игр."],
+        "toys_lfl":      ["игрушк lfl", "toy lfl", "игр.lfl", "игр.лфл"],
+        "shoes_stock":   ["обувь", "shoe", "обув."],
+        "shoes_lfl":     ["обувь lfl", "обувь лфл", "обув.lfl"],
+        "sport_stock":   ["спорт", "sport"],
+        "sport_lfl":     ["спорт lfl", "спорт лфл", "спорт.lfl"],
+    }
+
+    col_map = {}
+    data_start = 1
+    for ri in range(min(10, len(df))):
+        row_vals = [str(v).lower().strip() for v in df.iloc[ri]]
+        matches = 0
+        tmp_map = {}
+        for field, keys in STOCK_KEYS.items():
+            for ci, cell in enumerate(row_vals):
+                if any(k in cell for k in keys) and field not in tmp_map:
+                    tmp_map[field] = ci
+                    matches += 1
+                    break
+        if matches >= 3:
+            data_start = ri + 1
+            col_map = tmp_map
+            break
+
+    if not col_map:
+        col_map = {
+            "total_stock": 3, "total_lfl": 4,
+            "clothes_stock": 5, "clothes_lfl": 6,
+            "toys_stock": 7, "toys_lfl": 8,
+            "shoes_stock": 9, "shoes_lfl": 10,
+            "sport_stock": 11, "sport_lfl": 12,
+        }
+
+    def gcol(row, field, default=0.0):
+        idx = col_map.get(field)
+        if idx is None or idx >= len(row):
+            return default
+        return _safe_float(row[idx], default)
+
+    def norm_lfl(v):
+        if -5 < v < 5 and v != 0:
+            return round(v * 100, 2)
+        return round(v, 2)
+
+    data_df = df.iloc[data_start:].reset_index(drop=True)
+    conn = get_db()
+    conn.execute("DELETE FROM stock_data WHERE report_date=%s", (report_date,))
+    conn.commit()
+
+    rows_inserted = 0
+    for _, row in data_df.iterrows():
+        try:
+            subdivision = str(row.iloc[1] if len(row) > 1 else "").strip()
+            store_raw   = str(row.iloc[2] if len(row) > 2 else "").strip()
+        except Exception:
+            continue
+        if not subdivision or subdivision == "nan":
+            continue
+
+        is_division = (DIVISION_NAME in subdivision) and (
+            not store_raw or store_raw == "nan" or store_raw == subdivision
+        )
+        store_id = None
+        if store_raw and store_raw != "nan":
+            try:
+                store_id = int(float(store_raw))
+                if store_id not in STORE_DATA:
+                    store_id = None
+            except Exception:
+                store_id = None
+
+        if not is_division and store_id is None:
+            continue
+
+        conn.execute("""
+            INSERT INTO stock_data
+              (report_date, store_id, subdivision,
+               total_stock, total_lfl,
+               clothes_stock, clothes_lfl,
+               toys_stock, toys_lfl,
+               shoes_stock, shoes_lfl,
+               sport_stock, sport_lfl)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (report_date,
+              None if is_division else store_id,
+              DIVISION_NAME if is_division else subdivision,
+              gcol(row, "total_stock"),   norm_lfl(gcol(row, "total_lfl")),
+              gcol(row, "clothes_stock"), norm_lfl(gcol(row, "clothes_lfl")),
+              gcol(row, "toys_stock"),    norm_lfl(gcol(row, "toys_lfl")),
+              gcol(row, "shoes_stock"),   norm_lfl(gcol(row, "shoes_lfl")),
+              gcol(row, "sport_stock"),   norm_lfl(gcol(row, "sport_lfl"))))
+        rows_inserted += 1
+
+    conn.execute("INSERT INTO stock_upload_log (filename, report_date, rows_count) VALUES (%s,%s,%s)",
+                 (filename, report_date, rows_inserted))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "report_date": report_date, "rows": rows_inserted, "sheet": sheet}
+
+@app.post("/api/stock/upload")
+async def upload_stock(file: UploadFile = File(...), user=Depends(require_admin)):
+    content = await file.read()
+    result = _parse_stock_xlsx(content, file.filename)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.get("/api/stock/store/{store_id}")
+def get_stock_store(store_id: int, user=Depends(require_auth)):
+    if user["role"] != "admin" and user.get("store_id") != store_id:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    conn = get_db()
+    last = conn.execute(
+        "SELECT report_date FROM stock_data ORDER BY uploaded_at DESC LIMIT 1"
+    ).fetchone()
+    if not last:
+        conn.close()
+        return {"store": None, "division": None, "report_date": None}
+    rdate = last["report_date"]
+    store = conn.execute(
+        "SELECT * FROM stock_data WHERE report_date=%s AND store_id=%s",
+        (rdate, store_id)
+    ).fetchone()
+    division = conn.execute(
+        "SELECT * FROM stock_data WHERE report_date=%s AND store_id IS NULL",
+        (rdate,)
+    ).fetchone()
+    conn.close()
+    return {
+        "report_date": rdate,
+        "store": dict(store) if store else None,
+        "division": dict(division) if division else None
+    }
+
+@app.get("/api/stock/all")
+def get_stock_all(user=Depends(require_admin)):
+    conn = get_db()
+    last = conn.execute(
+        "SELECT report_date FROM stock_data ORDER BY uploaded_at DESC LIMIT 1"
+    ).fetchone()
+    if not last:
+        conn.close()
+        return {"stores": [], "division": None, "report_date": None}
+    rdate = last["report_date"]
+    stores = conn.execute(
+        "SELECT * FROM stock_data WHERE report_date=%s AND store_id IS NOT NULL ORDER BY total_stock DESC",
+        (rdate,)
+    ).fetchall()
+    division = conn.execute(
+        "SELECT * FROM stock_data WHERE report_date=%s AND store_id IS NULL",
+        (rdate,)
+    ).fetchone()
+    conn.close()
+    return {
+        "report_date": rdate,
+        "stores": [dict(r) for r in stores],
+        "division": dict(division) if division else None
+    }
+
+@app.get("/api/stock/log")
+def stock_log(user=Depends(require_admin)):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM stock_upload_log ORDER BY uploaded_at DESC LIMIT 10"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
