@@ -1338,7 +1338,7 @@ def sales_log(user=Depends(require_admin)):
     return [dict(r) for r in rows]
 
 @app.get("/api/sales/debug-headers")
-def sales_debug_headers(user=Depends(require_admin)):
+def sales_debug_headers():
     """Показывает заголовки Excel и определённые колонки из последнего парсинга."""
     return _last_sales_parse_debug
 
