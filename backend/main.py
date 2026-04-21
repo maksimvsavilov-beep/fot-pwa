@@ -1150,17 +1150,28 @@ def _parse_sales_xlsx(content: bytes, filename: str) -> dict:
             col_map = tmp_map
             break
 
-    # Если автоопределение не сработало — используем жёстко заданные индексы
-    if not col_map:
-        col_map = {
-            "to_fact": 4, "plan_pct": 5, "lfl": 6, "margin": 8,
-            "avg_ticket": 10, "conversion": 12, "upt": 14,
-            "traffic": 16, "traffic_lfl": 17,
-            "toys_to": 18, "toys_lfl": 19,
-            "clothes_to": 21, "clothes_lfl": 22,
-            "shoes_to": 24, "shoes_lfl": 25,
-            "sport_to": 27, "sport_lfl": 28,
-        }
+    # Fallback-позиции для полей, не найденных автоопределением
+    FALLBACK_COLS = {
+        "to_fact": 4, "plan_pct": 5, "lfl": 6, "margin": 8,
+        "avg_ticket": 10, "conversion": 12, "upt": 14,
+        "traffic": 16, "traffic_lfl": 17,
+        "toys_to": 18, "toys_lfl": 19,
+        "clothes_to": 21, "clothes_lfl": 22,
+        "shoes_to": 24, "shoes_lfl": 25,
+        "sport_to": 27, "sport_lfl": 28,
+    }
+    for field, idx in FALLBACK_COLS.items():
+        if field not in col_map:
+            col_map[field] = idx
+
+    # Сохраняем debug-информацию о последнем парсинге
+    global _last_sales_parse_debug
+    _last_sales_parse_debug = {
+        "sheet": sheet,
+        "header_row": header_row,
+        "col_map": col_map,
+        "raw_headers": [str(v) for v in df.iloc[header_row]] if header_row < len(df) else [],
+    }
 
     def gcol(row, field, default=0.0):
         idx = col_map.get(field)
@@ -1325,6 +1336,11 @@ def sales_log(user=Depends(require_admin)):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+@app.get("/api/sales/debug-headers")
+def sales_debug_headers(user=Depends(require_admin)):
+    """Показывает заголовки Excel и определённые колонки из последнего парсинга."""
+    return _last_sales_parse_debug
 
 # ─── Остатки (Stock) ──────────────────────────────────────────────────────────
 
@@ -1704,6 +1720,7 @@ def email_status(user=Depends(require_admin)):
 
 # ─── Планировщик (встроенный threading, без внешних зависимостей) ─────────────
 _last_email_fetch_result: dict = {"status": "never", "time": None, "error": None, "rows": None}
+_last_sales_parse_debug: dict = {}
 
 def _email_scheduler_loop():
     """Фоновый поток: проверяет время и запускает загрузку раз в день."""
