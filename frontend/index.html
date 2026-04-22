@@ -211,6 +211,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .s-v  { background: #D9D9D9; color: #555; }
 .s-o  { background: #FFEB9C; color: #7d5a00; font-weight: 600; }
 .s-b  { background: #FFC7CE; color: #9c0006; font-weight: 600; }
+.s-n  { background: #808080; color: #fff; font-weight: 600; }
 .s-we { background: #F0F0F0; color: #aaa; }
 .sched-table .th-we { background: #C8C8C8; }
 .sched-saved { font-size: 12px; color: var(--green); text-align: center; padding: 4px; }
@@ -535,6 +536,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
           <span style="background:#D9D9D9;padding:2px 8px;border-radius:4px">В — выходной</span>
           <span style="background:#FFEB9C;padding:2px 8px;border-radius:4px">О — отпуск</span>
           <span style="background:#FFC7CE;padding:2px 8px;border-radius:4px">Б — больничный</span>
+          <span style="background:#808080;color:#fff;padding:2px 8px;border-radius:4px">Н — невыход</span>
           <span style="background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #ddd">нажмите ячейку для изменения</span>
         </div>
       </div>
@@ -696,6 +698,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
           <span style="background:#D9D9D9;padding:2px 8px;border-radius:4px">В — выходной</span>
           <span style="background:#FFEB9C;padding:2px 8px;border-radius:4px">О — отпуск</span>
           <span style="background:#FFC7CE;padding:2px 8px;border-radius:4px">Б — больничный</span>
+          <span style="background:#808080;color:#fff;padding:2px 8px;border-radius:4px">Н — невыход</span>
           <span style="background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #ddd">нажмите ячейку для изменения</span>
         </div>
       </div>
@@ -958,6 +961,8 @@ function renderStoreDetail(d) {
       const hCoef = e.hours_coef ?? 1;
       const hLabel = e.hours > 0
         ? `${e.hours}ч × ${hCoef.toFixed(2)}`
+        : hCoef === 0
+        ? `<span style="color:var(--amber)">0ч (отпуск/невыход)</span>`
         : `<span style="color:#bbb">нет графика</span>`;
       staffHtml += `<div class="staff-row">
         <div class="staff-info" style="flex:1">
@@ -1100,6 +1105,7 @@ function editDirCell(el) {
       <button class="cp-btn s-v" onclick="setDirCellVal(${ei},${day},'В')">В</button>
       <button class="cp-btn s-o" onclick="setDirCellVal(${ei},${day},'О')">О</button>
       <button class="cp-btn s-b" onclick="setDirCellVal(${ei},${day},'Б')">Б</button>
+      <button class="cp-btn s-n" onclick="setDirCellVal(${ei},${day},'Н')">Н</button>
       <button class="cp-btn" onclick="setDirCellVal(${ei},${day},'')" style="background:#f0f0f0;color:#666">✕</button>
     </div>`;
   const rect = el.getBoundingClientRect();
@@ -1768,7 +1774,7 @@ function adminTab(tab) {
 
 // ── График работы ───────────────────────────────────────────────────────────
 let scheduleData = null;
-const STATUS_CLASS = {'В':'s-v','О':'s-o','Б':'s-b'};
+const STATUS_CLASS = {'В':'s-v','О':'s-o','Б':'s-b','Н':'s-n'};
 const WD_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
 function cellClass(val, isWe) {
@@ -1878,6 +1884,7 @@ function editCell(el) {
       <button class="cp-btn s-v" onclick="setCellVal(${ei},${day},'В')">В</button>
       <button class="cp-btn s-o" onclick="setCellVal(${ei},${day},'О')">О</button>
       <button class="cp-btn s-b" onclick="setCellVal(${ei},${day},'Б')">Б</button>
+      <button class="cp-btn s-n" onclick="setCellVal(${ei},${day},'Н')">Н</button>
       <button class="cp-btn" onclick="setCellVal(${ei},${day},'')" style="background:#f0f0f0;color:#666">✕</button>
     </div>`;
 

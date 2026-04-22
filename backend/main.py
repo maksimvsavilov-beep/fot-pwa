@@ -552,15 +552,18 @@ def get_store_data(store_id: int, days_total: int = 31, forecast_pct: int = 100,
     for srow in sched_rows:
         try:
             days_list = json.loads(srow["days"] or "[]")
-            total_h = sum(int(d) for d in days_list if str(d).isdigit() and int(d) > 0)
-            if total_h > 0:
-                hours_map[srow["employee_name"]] = total_h
+            # Считаем заполненным только если есть хоть одна непустая ячейка
+            if any(d not in ("", None) for d in days_list):
+                total_h = sum(int(d) for d in days_list if str(d).isdigit() and int(d) > 0)
+                hours_map[srow["employee_name"]] = total_h  # сохраняем даже если 0
         except Exception:
             pass
 
     def get_hours_coef(name):
-        h = hours_map.get(name, 0)
-        return round(h / STANDARD_HOURS, 4) if h > 0 else 1.0
+        if name not in hours_map:
+            return 1.0  # нет данных графика → стандартный коэф
+        h = hours_map[name]
+        return round(h / STANDARD_HOURS, 4) if h > 0 else 0.0  # заполнен, но 0 часов → коэф 0
 
     total_row = next((r for r in rows if r["is_total"]), None)
     staff = [r for r in rows if not r["is_total"] and not r["is_bezshk"] and r["role"] and r["role"] != "НетДолжности"]
@@ -1003,7 +1006,8 @@ def export_schedule(store_id: int, month: str, user=Depends(require_auth)):
     ws.column_dimensions[get_column_letter(days_in_month + 4)].width = 6
 
     # Data rows
-    STATUS_COLOR = {"О": fill_vac, "Б": fill_sick}
+    fill_noshow = PatternFill("solid", fgColor="808080")
+    STATUS_COLOR = {"О": fill_vac, "Б": fill_sick, "Н": fill_noshow}
     for i, emp in enumerate(data["employees"]):
         row = i + 3
         ws.cell(row=row, column=1, value=i + 1).border = border
