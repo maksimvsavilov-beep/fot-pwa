@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 import psycopg2
 import psycopg2.extras
+import sqlite3
 import hashlib, secrets, os, io, json
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -84,13 +85,25 @@ def get_store_ref_from_conn(store_id: int, conn) -> dict:
 
 # ─── БД (PostgreSQL) ─────────────────────────────────────────────────────────
 class DBConn:
-    """Wrapper making psycopg2 behave like sqlite3 for minimal code changes."""
+    """Wrapper supporting both SQLite (no DATABASE_URL) and PostgreSQL."""
     def __init__(self, dsn):
-        self._conn = psycopg2.connect(dsn)
+        if dsn:
+            self._conn = psycopg2.connect(dsn)
+            self._is_pg = True
+        else:
+            self._conn = sqlite3.connect("fot.db", check_same_thread=False)
+            self._conn.row_factory = lambda cur, row: {
+                col[0]: row[idx] for idx, col in enumerate(cur.description)
+            } if cur.description else {}
+            self._is_pg = False
 
     def execute(self, sql, params=None):
-        sql = sql.replace("?", "%s")
-        cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if self._is_pg:
+            sql = sql.replace("?", "%s")
+            sql = sql.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY")
+            cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            cur = self._conn.cursor()
         cur.execute(sql, params) if params else cur.execute(sql)
         return cur
 
@@ -110,7 +123,7 @@ def init_db():
     conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             pin_hash TEXT NOT NULL,
             store_id INTEGER,
@@ -122,7 +135,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS user_sessions (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             user_id INTEGER NOT NULL,
             token TEXT NOT NULL UNIQUE,
             token_expires TEXT NOT NULL,
@@ -131,7 +144,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS motivation_data (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             store_id INTEGER NOT NULL,
             report_date TEXT NOT NULL,
             login TEXT,
@@ -148,7 +161,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS upload_log (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             filename TEXT,
             report_date TEXT,
             rows_count INTEGER,
@@ -157,7 +170,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS fot_plan (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             store_id INTEGER NOT NULL,
             month TEXT NOT NULL,
             plan INTEGER DEFAULT 0,
@@ -175,7 +188,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS fot_upload_log (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             filename TEXT,
             month TEXT,
             stores_count INTEGER,
@@ -184,7 +197,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS work_schedule (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             store_id INTEGER NOT NULL,
             month TEXT NOT NULL,
             employee_name TEXT NOT NULL,
@@ -196,7 +209,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sales_data (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             report_date TEXT NOT NULL,
             store_id INTEGER,
             subdivision TEXT,
@@ -218,7 +231,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sales_upload_log (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             filename TEXT,
             report_date TEXT,
             rows_count INTEGER,
@@ -227,7 +240,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS stock_data (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             report_date TEXT NOT NULL,
             store_id INTEGER,
             subdivision TEXT,
@@ -246,7 +259,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS stock_upload_log (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             filename TEXT,
             report_date TEXT,
             rows_count INTEGER,
