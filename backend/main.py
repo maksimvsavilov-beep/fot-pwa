@@ -1587,22 +1587,28 @@ def fetch_motivation_from_email() -> dict:
         mail.login(EMAIL_USER, EMAIL_PASSWORD)
         mail.select("INBOX")
 
-        # Ищем письма от отправителя с нужной темой
-        _, msgs = mail.search(None, f'FROM "{EMAIL_SENDER}"')
+        # Ищем по ключевому слову темы (работает даже с Fwd: Мотивация ...)
+        keyword = EMAIL_SUBJECT.split()[0]  # например 'Мотивация'
+        _, msgs = mail.search(None, f'SUBJECT "{keyword}"')
         ids = msgs[0].split() if msgs[0] else []
 
-        # Дополнительная фильтрация по теме — берём последнее
+        # Если не нашли по SUBJECT IMAP — ищем среди ALL и фильтруем вручную
+        if not ids:
+            _, msgs = mail.search(None, 'ALL')
+            ids = msgs[0].split() if msgs[0] else []
+
+        # Берём последнее письмо, тема которого содержит ключевое слово
         target_id = None
         for eid in reversed(ids):
-            _, hdr = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-            subj_raw = hdr[0][1].decode("utf-8", errors="replace") if hdr[0] else ""
-            if EMAIL_SUBJECT.lower() in subj_raw.lower():
+            _, hdr = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT)])')
+            subj_raw = hdr[0][1].decode('utf-8', errors='replace') if hdr[0] else ''
+            if keyword.lower() in subj_raw.lower():
                 target_id = eid
                 break
 
         if not target_id:
             mail.logout()
-            return {"ok": False, "error": f"Письмо с темой '{EMAIL_SUBJECT}' не найдено"}
+            return {'ok': False, 'error': f'Письмо с темой {EMAIL_SUBJECT!r} не найдено в {EMAIL_USER}'}
 
         _, msg_data = mail.fetch(target_id, "(RFC822)")
         mail.logout()
