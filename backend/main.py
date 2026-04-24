@@ -1587,15 +1587,10 @@ def fetch_motivation_from_email() -> dict:
         mail.login(EMAIL_USER, EMAIL_PASSWORD)
         mail.select("INBOX")
 
-        # Ищем по ключевому слову темы (работает даже с Fwd: Мотивация ...)
-        keyword = EMAIL_SUBJECT.split()[0]  # например 'Мотивация'
-        _, msgs = mail.search(None, f'SUBJECT "{keyword}"')
+        # Загружаем все письма и фильтруем по теме в Python (IMAP SUBJECT не поддерживает кириллицу)
+        keyword = EMAIL_SUBJECT.split()[0]  # 'Мотивация'
+        _, msgs = mail.search(None, 'ALL')
         ids = msgs[0].split() if msgs[0] else []
-
-        # Если не нашли по SUBJECT IMAP — ищем среди ALL и фильтруем вручную
-        if not ids:
-            _, msgs = mail.search(None, 'ALL')
-            ids = msgs[0].split() if msgs[0] else []
 
         # Берём последнее письмо, тема которого содержит ключевое слово
         target_id = None
