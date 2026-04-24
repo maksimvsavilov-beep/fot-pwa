@@ -103,6 +103,7 @@ class DBConn:
             sql = sql.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY")
             cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         else:
+            sql = sql.replace("%s", "?")
             cur = self._conn.cursor()
         cur.execute(sql, params) if params else cur.execute(sql)
         return cur
